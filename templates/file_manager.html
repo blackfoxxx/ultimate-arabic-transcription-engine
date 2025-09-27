@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Manager - Arabic STT Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+
+        .main-container {
+            padding: 2rem 0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1.5rem;
+        }
+
+        .upload-zone {
+            border: 3px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f8f9fa;
+            margin-bottom: 2rem;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary-color);
+            background: #e3f2fd;
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--success-color);
+            background: #d4edda;
+            transform: scale(1.02);
+        }
+
+        .file-item {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .file-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .file-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-uploaded { background: #d4edda; color: #155724; }
+        .status-processing { background: #d1ecf1; color: #0c5460; }
+        .status-completed { background: #d4edda; color: #155724; }
+        .status-failed { background: #f8d7da; color: #721c24; }
+
+        .progress-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 8px;
+            margin: 0.5rem 0;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-process {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-process:hover {
+            background: #2ecc71;
+            transform: translateY(-1px);
+        }
+
+        .btn-delete {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-download {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .file-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .info-item {
+            text-align: center;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-size: 0.8rem;
+            color: #666;
+            display: block;
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1050;
+        }
+
+        .processing-options {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .processing-options.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-metadata {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .bulk-actions {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .bulk-actions.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .file-info {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .btn-action {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-microphone-alt me-2"></i>
+                Arabic STT Platform
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Home</a>
+                <a class="nav-link active" href="/file-manager"><i class="fas fa-folder me-1"></i>File Manager</a>
+                <a class="nav-link" href="/monitor"><i class="fas fa-chart-line me-1"></i>Monitor</a>
+                <a class="nav-link" href="/settings"><i class="fas fa-cog me-1"></i>Settings</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <!-- Upload Section -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="fas fa-cloud-upload-alt me-2"></i>Upload Files</h3>
+                <p class="mb-0 mt-2 opacity-75">Upload audio/video files for transcription</p>
+            </div>
+            <div class="card-body">
+                <!-- Upload Zone -->
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Drop your files here or click to browse</h5>
+                    <p class="text-muted">Supports multiple file upload</p>
+                    <input type="file" id="fileInput" multiple accept="audio/*,video/*" class="d-none">
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Supported formats: MP3, WAV, MP4, MOV, FLAC, M4A, OGG, AAC (up to 5GB per file)
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Upload Progress -->
+                <div id="uploadProgress" class="d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Uploading files...</span>
+                        <span id="progressText">0%</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- File List -->
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-0"><i class="fas fa-files me-2"></i>Uploaded Files</h3>
+                        <p class="mb-0 mt-2 opacity-75">Manage your uploaded files and start processing</p>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-light" onclick="refreshFileList()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                        <button class="btn btn-outline-light" onclick="toggleBulkActions()" id="bulkToggle">
+                            <i class="fas fa-check-square me-1"></i>Bulk Actions
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Bulk Actions -->
+                <div class="bulk-actions" id="bulkActions">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <input type="checkbox" id="selectAll" class="form-check-input me-2">
+                            <label for="selectAll" class="form-check-label">Select All</label>
+                            <span class="ms-3 text-muted" id="selectedCount">0 selected</span>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-success" onclick="bulkProcess()">
+                                <i class="fas fa-play me-1"></i>Process Selected
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="bulkDelete()">
+                                <i class="fas fa-trash me-1"></i>Delete Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File List -->
+                <div id="fileList">
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open fa-3x mb-3"></i>
+                        <h5>No files uploaded yet</h5>
+                        <p class="text-muted">Upload your first audio or video file to get started</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Modal -->
+    <div class="modal fade" id="processingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>Configure Processing
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="processingForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Processing Mode</label>
+                                <select class="form-select" name="processing_mode" id="processingMode">
+                                    <option value="local" selected>Local Whisper Models</option>
+                                    <option value="api">OpenAI API (faster)</option>
+                                </select>
+                                <small class="text-muted">Local processing supports unlimited file sizes</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Model Size</label>
+                                <select class="form-select" name="model_size">
+                                    <option value="tiny">Tiny (fastest, least accurate)</option>
+                                    <option value="base">Base (fast)</option>
+                                    <option value="small">Small (balanced)</option>
+                                    <option value="medium" selected>Medium (recommended)</option>
+                                    <option value="large">Large (most accurate, slowest)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Language</label>
+                                <select class="form-select" name="language">
+                                    <option value="ar" selected>Arabic</option>
+                                    <option value="en">English</option>
+                                    <option value="auto">Auto-detect</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Output Formats</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="output_formats" value="txt" id="txt" checked>
+                                    <label class="form-check-label" for="txt">Text (.txt)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="output_formats" value="srt" id="srt" checked>
+                                    <label class="form-check-label" for="srt">Subtitles (.srt)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="output_formats" value="vtt" id="vtt">
+                                    <label class="form-check-label" for="vtt">WebVTT (.vtt)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="output_formats" value="json" id="json">
+                                    <label class="form-check-label" for="json">JSON (.json)</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <label class="form-label">Noise Reduction</label>
+                                <select class="form-select" name="noise_reduction">
+                                    <option value="auto" selected>Auto (recommended)</option>
+                                    <option value="light">Light</option>
+                                    <option value="moderate">Moderate</option>
+                                    <option value="aggressive">Aggressive</option>
+                                    <option value="none">None</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="file_ids" id="fileIds">
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="startProcessing()">
+                        <i class="fas fa-play me-1"></i>Start Processing
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- File Manager Script -->
+    <script>
+        // Global variables
+        let uploadedFiles = [];
+        let selectedFiles = new Set();
+        let bulkMode = false;
+
+        // DOM elements
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const processingModal = new bootstrap.Modal(document.getElementById('processingModal'));
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            loadUploadedFiles();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadUploadedFiles, 30000);
+        });
+
+        function setupEventListeners() {
+            // Upload zone handlers
+            uploadZone.addEventListener('click', () => fileInput.click());
+            uploadZone.addEventListener('dragover', handleDragOver);
+            uploadZone.addEventListener('dragleave', handleDragLeave);
+            uploadZone.addEventListener('drop', handleFileDrop);
+            
+            // File input handler
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // Bulk selection handlers
+            document.getElementById('selectAll').addEventListener('change', handleSelectAll);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+        }
+
+        function handleFileDrop(e) {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            
+            const files = Array.from(e.dataTransfer.files);
+            uploadFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            uploadFiles(files);
+            e.target.value = ''; // Reset input
+        }
+
+        async function uploadFiles(files) {
+            if (files.length === 0) return;
+            
+            // Validate files
+            const validFiles = files.filter(validateFile);
+            if (validFiles.length === 0) {
+                showToast('No valid files selected', 'warning');
+                return;
+            }
+            
+            if (validFiles.length !== files.length) {
+                showToast(`${files.length - validFiles.length} files were skipped (invalid format or too large)`, 'warning');
+            }
+
+            // Show progress
+            uploadProgress.classList.remove('d-none');
+            
+            let completed = 0;
+            const total = validFiles.length;
+
+            // Upload files one by one
+            for (const file of validFiles) {
+                try {
+                    await uploadSingleFile(file);
+                    completed++;
+                    
+                    const progress = (completed / total) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `${Math.round(progress)}%`;
+                    
+                } catch (error) {
+                    console.error(`Upload failed for ${file.name}:`, error);
+                    showToast(`Upload failed for ${file.name}`, 'danger');
+                }
+            }
+
+            // Hide progress and refresh list
+            setTimeout(() => {
+                uploadProgress.classList.add('d-none');
+                progressBar.style.width = '0%';
+                progressText.textContent = '0%';
+            }, 1000);
+
+            loadUploadedFiles();
+            showToast(`${completed} file(s) uploaded successfully!`, 'success');
+        }
+
+        function validateFile(file) {
+            const validExtensions = ['.mp3', '.wav', '.mp4', '.mov', '.flac', '.m4a', '.ogg', '.aac', '.avi', '.mkv', '.webm'];
+            const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
+            
+            const extension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(extension)) {
+                showToast(`Invalid file format: ${file.name}`, 'warning');
+                return false;
+            }
+            
+            if (file.size > maxSize) {
+                showToast(`File too large (max 5GB): ${file.name}`, 'warning');
+                return false;
+            }
+            
+            return true;
+        }
+
+        async function uploadSingleFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_only', 'true'); // Flag for upload-only mode
+            
+            const response = await fetch('/api/upload-file', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            return result;
+        }
+
+        async function loadUploadedFiles() {
+            try {
+                const response = await fetch('/api/uploaded-files');
+                const files = await response.json();
+                
+                uploadedFiles = files;
+                renderFileList();
+                
+            } catch (error) {
+                console.error('Failed to load files:', error);
+                showToast('Failed to load files', 'danger');
+            }
+        }
+
+        function renderFileList() {
+            if (uploadedFiles.length === 0) {
+                fileList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open fa-3x mb-3"></i>
+                        <h5>No files uploaded yet</h5>
+                        <p class="text-muted">Upload your first audio or video file to get started</p>
+                    </div>
+                `;
+                return;
+            }
+
+            fileList.innerHTML = uploadedFiles.map(file => renderFileItem(file)).join('');
+            updateBulkSelection();
+        }
+
+        function renderFileItem(file) {
+            const statusClass = `status-${file.status || 'uploaded'}`;
+            const canProcess = ['uploaded', 'failed'].includes(file.status);
+            const isCompleted = file.status === 'completed';
+            const isProcessing = file.status === 'processing';
+            
+            const bulkCheckbox = bulkMode ? `
+                <div class="form-check">
+                    <input class="form-check-input file-checkbox" type="checkbox" 
+                           value="${file.id}" onchange="updateSelection(this)">
+                </div>
+            ` : '';
+
+            return `
+                <div class="file-item" data-file-id="${file.id}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            ${bulkCheckbox}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-${getFileIcon(file.filename)} me-2"></i>
+                                    ${file.filename}
+                                </h6>
+                                <span class="file-status ${statusClass}">
+                                    ${getStatusText(file.status)}
+                                </span>
+                            </div>
+                            
+                            <div class="file-info">
+                                <div class="info-item">
+                                    <span class="info-label">Size</span>
+                                    <span class="info-value">${formatFileSize(file.size)}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Uploaded</span>
+                                    <span class="info-value">${formatDate(file.created_at)}</span>
+                                </div>
+                                ${file.duration ? `
+                                <div class="info-item">
+                                    <span class="info-label">Duration</span>
+                                    <span class="info-value">${formatDuration(file.duration)}</span>
+                                </div>
+                                ` : ''}
+                                ${file.processing_time ? `
+                                <div class="info-item">
+                                    <span class="info-label">Processed in</span>
+                                    <span class="info-value">${Math.round(file.processing_time)}s</span>
+                                </div>
+                                ` : ''}
+                            </div>
+
+                            ${isProcessing ? `
+                                <div class="progress-container mt-2">
+                                    <div class="progress-bar" style="width: 60%; animation: pulse 2s infinite;"></div>
+                                </div>
+                                <small class="text-muted">${file.message || 'Processing...'}</small>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="text-end ms-3">
+                            ${canProcess ? `
+                                <button class="btn-action btn-process" onclick="processFile('${file.id}')">
+                                    <i class="fas fa-play me-1"></i>Process
+                                </button>
+                            ` : ''}
+                            
+                            ${isCompleted ? `
+                                <button class="btn-action btn-download" onclick="downloadResults('${file.id}')">
+                                    <i class="fas fa-download me-1"></i>Results
+                                </button>
+                            ` : ''}
+                            
+                            <button class="btn-action btn-delete" onclick="deleteFile('${file.id}')">
+                                <i class="fas fa-trash me-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const audioExt = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac', 'aiff'];
+            const videoExt = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
+            
+            if (audioExt.includes(ext)) return 'file-audio';
+            if (videoExt.includes(ext)) return 'file-video';
+            return 'file';
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                uploaded: 'Ready',
+                processing: 'Processing',
+                completed: 'Completed',
+                failed: 'Failed'
+            };
+            return statusMap[status] || 'Unknown';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            return new Date(dateString).toLocaleDateString();
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return 'Unknown';
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function processFile(fileId) {
+            document.getElementById('fileIds').value = fileId;
+            processingModal.show();
+        }
+
+        function toggleBulkActions() {
+            bulkMode = !bulkMode;
+            const bulkActions = document.getElementById('bulkActions');
+            const bulkToggle = document.getElementById('bulkToggle');
+            
+            if (bulkMode) {
+                bulkActions.classList.add('show');
+                bulkToggle.innerHTML = '<i class="fas fa-times me-1"></i>Cancel';
+                bulkToggle.classList.add('active');
+            } else {
+                bulkActions.classList.remove('show');
+                bulkToggle.innerHTML = '<i class="fas fa-check-square me-1"></i>Bulk Actions';
+                bulkToggle.classList.remove('active');
+                selectedFiles.clear();
+            }
+            
+            renderFileList();
+        }
+
+        function handleSelectAll(e) {
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = e.target.checked;
+                updateSelection(cb);
+            });
+        }
+
+        function updateSelection(checkbox) {
+            if (checkbox.checked) {
+                selectedFiles.add(checkbox.value);
+            } else {
+                selectedFiles.delete(checkbox.value);
+            }
+            updateBulkSelection();
+        }
+
+        function updateBulkSelection() {
+            const selectedCount = document.getElementById('selectedCount');
+            if (selectedCount) {
+                selectedCount.textContent = `${selectedFiles.size} selected`;
+            }
+        }
+
+        function bulkProcess() {
+            if (selectedFiles.size === 0) {
+                showToast('No files selected', 'warning');
+                return;
+            }
+            
+            document.getElementById('fileIds').value = Array.from(selectedFiles).join(',');
+            processingModal.show();
+        }
+
+        async function bulkDelete() {
+            if (selectedFiles.size === 0) {
+                showToast('No files selected', 'warning');
+                return;
+            }
+            
+            if (!confirm(`Delete ${selectedFiles.size} selected files?`)) return;
+            
+            try {
+                const fileIds = Array.from(selectedFiles);
+                const response = await fetch('/api/delete-files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_ids: fileIds })
+                });
+                
+                if (response.ok) {
+                    showToast(`${fileIds.length} files deleted`, 'success');
+                    selectedFiles.clear();
+                    loadUploadedFiles();
+                } else {
+                    throw new Error('Delete failed');
+                }
+            } catch (error) {
+                showToast('Failed to delete files', 'danger');
+            }
+        }
+
+        async function startProcessing() {
+            const form = document.getElementById('processingForm');
+            const formData = new FormData(form);
+            
+            // Get selected output formats
+            const outputFormats = [];
+            form.querySelectorAll('input[name="output_formats"]:checked').forEach(cb => {
+                outputFormats.push(cb.value);
+            });
+            
+            if (outputFormats.length === 0) {
+                showToast('Please select at least one output format', 'warning');
+                return;
+            }
+            
+            try {
+                const data = {
+                    file_ids: formData.get('file_ids').split(','),
+                    processing_mode: formData.get('processing_mode'),
+                    model_size: formData.get('model_size'),
+                    language: formData.get('language'),
+                    noise_reduction: formData.get('noise_reduction'),
+                    output_formats: outputFormats
+                };
+                
+                const response = await fetch('/api/process-files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(`Processing started for ${result.started_count} files`, 'success');
+                    processingModal.hide();
+                    loadUploadedFiles();
+                } else {
+                    throw new Error('Processing failed');
+                }
+            } catch (error) {
+                showToast('Failed to start processing', 'danger');
+            }
+        }
+
+        async function deleteFile(fileId) {
+            if (!confirm('Delete this file?')) return;
+            
+            try {
+                const response = await fetch('/api/delete-files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_ids: [fileId] })
+                });
+                
+                if (response.ok) {
+                    showToast('File deleted', 'success');
+                    loadUploadedFiles();
+                } else {
+                    throw new Error('Delete failed');
+                }
+            } catch (error) {
+                showToast('Failed to delete file', 'danger');
+            }
+        }
+
+        async function downloadResults(fileId) {
+            try {
+                window.open(`/api/download-results/${fileId}`, '_blank');
+            } catch (error) {
+                showToast('Download failed', 'danger');
+            }
+        }
+
+        function refreshFileList() {
+            loadUploadedFiles();
+            showToast('File list refreshed', 'info');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} alert-dismissible fade show`;
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.getElementById('toastContainer').appendChild(toast);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
+
+        // Add pulse animation for processing items
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.5; }
+                100% { opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+# Arabic Transcription System - GitIgnore
+
+# Large Files and Media
+*.mp3
+*.mp4
+*.wav
+*.m4a
+*.flac
+*.aac
+*.ogg
+*.wma
+uploads/
+results/
+temp_files/
+audio_files/
+large_files/
+test_audio/
+sample_audio/
+
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+jobs.db
+
+# Log Files
+*.log
+logs/
+debug_*.txt
+test_results_*.json
+*_results_*.json
+enhanced_test.log
+large_file_test_results.log
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+conda-env/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Temporary Files
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
+
+# API Keys and Secrets
+.env.local
+.env.production
+.env.development
+secrets.json
+config_private.py
+api_keys.txt
+
+# Model Files (Large ML Models)
+models/
+*.model
+*.pkl
+*.bin
+*.safetensors
+whisper_models/
+aya_models/
+
+# Test Results and Backups
+*_backup*.py
+*_test_*.json
+COMPREHENSIVE_TEST_RESULTS_*.md
+*_STATUS.md
+*_COMPLETE.md
+*_ACCOMPLISHED.md
+backup/
+backups/
+
+# MacOS Specific
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows Specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux Specific
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Flask/Web App Specific
+instance/
+.webassets-cache
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Large Documentation Files (keep essential ones)
+*_BREAKTHROUGH_*.md
+*_MISSION_*.md
+*_FINAL_*.md
+*_DEPLOYMENT_*.md
+COMPLETION_SUMMARY.md
+
+# Exclude specific large result files
+arabic_quality_comparison_results.json
+enhanced_90mb_validation_summary.json
+large_file_test_complete_results.json

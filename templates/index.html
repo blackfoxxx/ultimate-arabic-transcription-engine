@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arabic STT Platform - Self-Hosted Speech-to-Text</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #2c5530;
+            --secondary-color: #6c757d;
+            --success-color: #198754;
+            --warning-color: #fd7e14;
+            --danger-color: #dc3545;
+            --info-color: #0dcaf0;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: var(--primary-color) !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), #4a7c59);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1.5rem;
+        }
+
+        .upload-zone {
+            border: 3px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f8f9fa;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary-color);
+            background: #e3f2fd;
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--success-color);
+            background: #d4edda;
+        }
+
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+            background: #e9ecef;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+        }
+
+        .btn-primary:hover {
+            background: #1e3a21;
+            border-color: #1e3a21;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-processing { background: var(--warning-color); animation: pulse 1.5s infinite; }
+        .status-completed { background: var(--success-color); }
+        .status-failed { background: var(--danger-color); }
+        .status-uploaded { background: var(--info-color); }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .feature-card {
+            text-align: center;
+            padding: 2rem 1rem;
+            height: 100%;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .history-item {
+            border-left: 4px solid var(--primary-color);
+            margin-bottom: 1rem;
+            background: white;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .rtl-text {
+            direction: rtl;
+            text-align: right;
+            font-family: 'Arial Unicode MS', 'Tahoma', sans-serif;
+        }
+
+        .footer {
+            background: var(--dark-color);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 4rem;
+        }
+
+        /* Multi-speaker processing styles */
+        .multi-speaker-preview .speaker-card {
+            background: #f8f9fa;
+            transition: background-color 0.3s ease;
+        }
+
+        .multi-speaker-preview .speaker-card:hover {
+            background: #e3f2fd;
+        }
+
+        .speaker-text {
+            font-family: 'Arial Unicode MS', 'Tahoma', sans-serif;
+            line-height: 1.4;
+        }
+
+        .transcript-preview {
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: 'Arial Unicode MS', 'Tahoma', sans-serif;
+        }
+
+        .speakers-preview {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .diarization-card .card-header {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-dark navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-microphone-alt me-2"></i>
+                Arabic STT Platform
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#upload"><i class="fas fa-upload me-1"></i> Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/file-manager"><i class="fas fa-folder me-1"></i> File Manager</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#history"><i class="fas fa-history me-1"></i> History</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/monitor"><i class="fas fa-tachometer-alt me-1"></i> Monitor</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#api"><i class="fas fa-code me-1"></i> API</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings"><i class="fas fa-cog me-1"></i> Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Hero Section -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="text-center">
+                    <h1 class="display-4 fw-bold text-dark mb-3">
+                        Self-Hosted Arabic Speech-to-Text
+                    </h1>
+                    <p class="lead text-muted mb-4">
+                        Transform Arabic audio into accurate transcripts with complete privacy and local control.
+                        Optimized for Iraqi dialects and noisy environments.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="row mb-5">
+            <div class="col-md-3 mb-3">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-shield-alt feature-icon"></i>
+                        <h5>Complete Privacy</h5>
+                        <p class="text-muted">All processing happens locally. Your sensitive content never leaves your infrastructure.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-language feature-icon"></i>
+                        <h5>Arabic Optimized</h5>
+                        <p class="text-muted">Specialized support for Arabic dialects, particularly Iraqi Arabic with enhanced accuracy.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-volume-up feature-icon"></i>
+                        <h5>Noise Reduction</h5>
+                        <p class="text-muted">Advanced AI-powered noise reduction improves transcription accuracy in challenging environments.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-download feature-icon"></i>
+                        <h5>Multiple Formats</h5>
+                        <p class="text-muted">Export transcripts as TXT, SRT, VTT, or structured JSON with timestamps.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="row mb-5" id="upload">
+            <div class="col-lg-8 mx-auto">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="mb-0"><i class="fas fa-cloud-upload-alt me-2"></i>Upload Audio/Video File</h3>
+                        <p class="mb-0 mt-2 opacity-75">Drag and drop your file or click to browse</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="uploadForm" enctype="multipart/form-data">
+                            <!-- Upload Zone -->
+                            <div class="upload-zone" id="uploadZone">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Drop your audio/video file here</h5>
+                                <p class="text-muted">or click to browse files</p>
+                                <input type="file" id="fileInput" name="file" accept="audio/*,video/*" class="d-none">
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        Supported: MP3, WAV, MP4, MOV, FLAC, M4A, OGG, AAC
+                                    </small>
+                                </div>
+                            </div>
+
+                            <!-- File Info -->
+                            <div id="fileInfo" class="alert alert-info mt-3 d-none">
+                                <i class="fas fa-file-audio me-2"></i>
+                                <span id="fileName"></span>
+                                <span class="badge bg-secondary ms-2" id="fileSize"></span>
+                            </div>
+
+                            <!-- Processing Options -->
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Processing Mode</label>
+                                    <select class="form-select" name="processing_mode" id="processingMode">
+                                        <option value="local" selected>Local Whisper Models - Free & Private</option>
+                                        <option value="api">OpenAI API - Faster & More Accurate</option>
+                                    </select>
+                                    <small class="text-muted">
+                                        <span id="processingModeHelp">Uses local Whisper models for complete privacy</span>
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Language</label>
+                                    <select class="form-select" name="language" id="language">
+                                        <option value="ar" selected>Arabic</option>
+                                        <option value="auto">Auto-detect</option>
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6" id="modelSizeContainer">
+                                    <label class="form-label">Model Size <small class="text-muted">(Local Mode Only)</small></label>
+                                    <select class="form-select" name="model_size" id="modelSize">
+                                        <option value="tiny">Tiny - Fastest</option>
+                                        <option value="base">Base - Fast</option>
+                                        <option value="small">Small - Balanced</option>
+                                        <option value="medium" selected>Medium - Recommended</option>
+                                        <option value="large">Large - Most Accurate</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Noise Reduction</label>
+                                    <select class="form-select" name="noise_reduction" id="noiseReduction">
+                                        <option value="auto" selected>Auto-detect</option>
+                                        <option value="rnnoise">RNNoise AI</option>
+                                        <option value="traditional">Traditional Filters</option>
+                                        <option value="none">None</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Multi-Speaker Processing -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="card border-info">
+                                        <div class="card-header bg-info bg-opacity-10 border-info">
+                                            <h6 class="mb-0 text-info">
+                                                <i class="fas fa-users me-2"></i>Multi-Speaker Processing
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="enable_diarization" id="enableDiarization">
+                                                        <label class="form-check-label" for="enableDiarization">
+                                                            <strong>Enable Speaker Separation</strong>
+                                                            <small class="d-block text-muted">Identify and separate different speakers</small>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Max Speakers</label>
+                                                    <select class="form-select" name="max_speakers" id="maxSpeakers" disabled>
+                                                        <option value="2">2 Speakers</option>
+                                                        <option value="3" selected>3 Speakers</option>
+                                                        <option value="4">4 Speakers</option>
+                                                        <option value="5">5 Speakers</option>
+                                                        <option value="10">Auto-detect (up to 10)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="row mt-2">
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="voice_enhancement" id="voiceEnhancement" disabled>
+                                                        <label class="form-check-label" for="voiceEnhancement">
+                                                            Voice Enhancement
+                                                            <small class="d-block text-muted">Apply advanced audio enhancement per speaker</small>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="speaker_profiles" id="speakerProfiles" disabled>
+                                                        <label class="form-check-label" for="speakerProfiles">
+                                                            Generate Speaker Profiles
+                                                            <small class="d-block text-muted">Analyze acoustic characteristics</small>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Aya Arabic Enhancement Section -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="card border-warning">
+                                        <div class="card-header bg-warning bg-opacity-10 border-warning">
+                                            <h6 class="mb-0 text-warning">
+                                                <i class="fas fa-magic me-2"></i>Aya Arabic Enhancement
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-8">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="enable_aya_enhancement" id="enableAyaEnhancement">
+                                                        <label class="form-check-label" for="enableAyaEnhancement">
+                                                            <strong>Enable Aya Arabic Enhancement</strong>
+                                                            <small class="d-block text-muted">
+                                                                <i class="fas fa-sparkles text-warning me-1"></i>
+                                                                Enhance Arabic text with advanced AI: improves grammar, adds diacritics, 
+                                                                corrects punctuation, and enhances text flow using the Aya multilingual model
+                                                            </small>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="text-end">
+                                                        <span class="badge bg-warning text-dark">
+                                                            <i class="fas fa-star me-1"></i>Premium Feature
+                                                        </span>
+                                                        <div class="small text-muted mt-1">
+                                                            Powered by Aya 8B Model
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Aya Enhancement Benefits -->
+                                            <div class="mt-2 aya-benefits" style="display: none;">
+                                                <div class="row text-sm">
+                                                    <div class="col-md-6">
+                                                        <div class="text-success">
+                                                            <i class="fas fa-check-circle me-1"></i>Arabic diacritics (تشكيل)
+                                                        </div>
+                                                        <div class="text-success">
+                                                            <i class="fas fa-check-circle me-1"></i>Grammar correction
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="text-success">
+                                                            <i class="fas fa-check-circle me-1"></i>Punctuation enhancement
+                                                        </div>
+                                                        <div class="text-success">
+                                                            <i class="fas fa-check-circle me-1"></i>Text flow improvement
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- LLM Enhancement Section -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success bg-opacity-10 border-success">
+                                            <h6 class="mb-0 text-success">
+                                                <i class="fas fa-brain me-2"></i>AI Text Enhancement & Analysis
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- LLM Model Selection -->
+                                            <div class="row mb-3">
+                                                <div class="col-md-8">
+                                                    <label class="form-label">LLM Model for Text Processing</label>
+                                                    <select class="form-select" name="llm_model" id="llmModel">
+                                                        <option value="">Loading models...</option>
+                                                    </select>
+                                                    <small class="text-muted">Select the AI model for text enhancement and analysis</small>
+                                                </div>
+                                                <div class="col-md-4 d-flex align-items-end">
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" id="manageLlmModels">
+                                                        <i class="fas fa-cog me-1"></i>Manage Models
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Enhancement Options -->
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-success mb-2">Text Enhancement</h6>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="enable_enhancement" id="enableEnhancement" checked>
+                                                        <label class="form-check-label" for="enableEnhancement">
+                                                            <strong>Enable AI Enhancement</strong>
+                                                        </label>
+                                                    </div>
+                                                    <div class="enhancement-options ms-3 mt-2">
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="enhance_grammar" id="enhanceGrammar" checked>
+                                                            <label class="form-check-label" for="enhanceGrammar">Grammar correction</label>
+                                                        </div>
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="enhance_punctuation" id="enhancePunctuation" checked>
+                                                            <label class="form-check-label" for="enhancePunctuation">Punctuation improvement</label>
+                                                        </div>
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="enhance_spelling" id="enhanceSpelling" checked>
+                                                            <label class="form-check-label" for="enhanceSpelling">Spelling correction</label>
+                                                        </div>
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="enhance_diacritization" id="enhanceDiacritization">
+                                                            <label class="form-check-label" for="enhanceDiacritization">Arabic diacritization</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <h6 class="text-info mb-2">Text Analysis</h6>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="enable_analysis" id="enableAnalysis" checked>
+                                                        <label class="form-check-label" for="enableAnalysis">
+                                                            <strong>Enable AI Analysis</strong>
+                                                        </label>
+                                                    </div>
+                                                    <div class="analysis-options ms-3 mt-2">
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="analyze_sentiment" id="analyzeSentiment" checked>
+                                                            <label class="form-check-label" for="analyzeSentiment">Sentiment analysis</label>
+                                                        </div>
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="analyze_entities" id="analyzeEntities" checked>
+                                                            <label class="form-check-label" for="analyzeEntities">Entity recognition</label>
+                                                        </div>
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="analyze_topics" id="analyzeTopics" checked>
+                                                            <label class="form-check-label" for="analyzeTopics">Topic modeling</label>
+                                                        </div>
+                                                        <div class="form-check form-check-sm">
+                                                            <input class="form-check-input" type="checkbox" name="analyze_keywords" id="analyzeKeywords" checked>
+                                                            <label class="form-check-label" for="analyzeKeywords">Keyword extraction</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- LLM Status -->
+                                            <div class="mt-3">
+                                                <div class="alert alert-info alert-sm d-none" id="llmStatus">
+                                                    <i class="fas fa-info-circle me-2"></i>
+                                                    <span id="llmStatusText">Checking LLM status...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <label class="form-label">Output Formats</label>
+                                    <div class="form-check-group">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="output_formats" value="txt" id="txt" checked>
+                                            <label class="form-check-label" for="txt">TXT</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="output_formats" value="srt" id="srt" checked>
+                                            <label class="form-check-label" for="srt">SRT</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="output_formats" value="vtt" id="vtt">
+                                            <label class="form-check-label" for="vtt">VTT</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" name="output_formats" value="json" id="json">
+                                            <label class="form-check-label" for="json">JSON</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Enhanced Timestamp Options -->
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <div class="border rounded p-3 bg-light">
+                                        <h6 class="text-primary mb-3">
+                                            <i class="fas fa-clock me-2"></i>Enhanced Timestamp Options
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="enhance_timestamps" id="enhanceTimestamps" checked>
+                                                    <label class="form-check-label" for="enhanceTimestamps">
+                                                        <strong>Enable Enhanced Timestamps</strong>
+                                                        <small class="d-block text-muted">Generate sentence and paragraph-level timing</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="generate_timestamp_report" id="generateTimestampReport">
+                                                    <label class="form-check-label" for="generateTimestampReport">
+                                                        <strong>Timestamp Analysis Report</strong>
+                                                        <small class="d-block text-muted">Detailed timing analysis and statistics</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="timestamp-help mt-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                Enhanced timestamps provide better subtitle granularity and detailed timing analysis.
+                                                Sentence-level timestamps improve SRT/VTT subtitle quality.
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Progress -->
+                            <div id="progressSection" class="mt-4 d-none">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span id="progressLabel">Processing...</span>
+                                    <span id="progressPercent">0%</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <small class="text-muted mt-2 d-block" id="progressDetails"></small>
+                                
+                                <!-- Processing Mode & Fallback Info -->
+                                <div id="processingModeInfo" class="mt-2 d-none">
+                                    <div class="alert alert-info alert-sm border-0 p-2 small" id="fallbackAlert">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <span id="processingModeText">Processing with local Whisper model...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Results -->
+                            <div id="resultsSection" class="mt-4 d-none">
+                                <div class="alert alert-success">
+                                    <h5><i class="fas fa-check-circle me-2"></i>Transcription Complete!</h5>
+                                    <div id="transcriptPreview" class="mt-3 p-3 bg-light rounded rtl-text"></div>
+                                    <div class="mt-3" id="downloadButtons"></div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="text-center mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                                    <i class="fas fa-play me-2"></i>Start Transcription
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing History -->
+        <div class="row mb-5" id="history">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="mb-0"><i class="fas fa-history me-2"></i>Processing History</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="historyList">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-clock fa-2x mb-3"></i>
+                                <p>No processing history yet. Upload your first file to get started!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Documentation -->
+        <div class="row mb-5" id="api">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="mb-0"><i class="fas fa-code me-2"></i>API Integration</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-4">Integrate the Arabic STT Platform into your applications using our simple REST API.</p>
+                        
+                        <h5>Upload File for Transcription</h5>
+                        <pre class="bg-light p-3 rounded"><code>curl -X POST http://localhost:5000/api/transcribe \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@audio.mp3" \
+  -F "model_size=medium" \
+  -F "language=ar" \
+  -F "output_formats=txt" \
+  -F "output_formats=srt"</code></pre>
+
+                        <h5 class="mt-4">Check Status</h5>
+                        <pre class="bg-light p-3 rounded"><code>curl -X GET http://localhost:5000/status/JOB_ID</code></pre>
+
+                        <h5 class="mt-4">Download Results</h5>
+                        <pre class="bg-light p-3 rounded"><code>curl -X GET http://localhost:5000/download/JOB_ID/txt</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Arabic STT Platform</h5>
+                    <p class="text-muted">Self-hosted speech-to-text solution for Arabic content with complete privacy and local control.</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="text-muted">
+                        Built with <i class="fas fa-heart text-danger"></i> for the Arabic-speaking community
+                    </p>
+                    <p class="text-muted small">
+                        Powered by Whisper AI • Enhanced for Arabic Dialects
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script>
+        // Global variables
+        let currentJobId = null;
+        let statusCheckInterval = null;
+
+        // DOM elements
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const submitBtn = document.getElementById('submitBtn');
+        const uploadForm = document.getElementById('uploadForm');
+        const progressSection = document.getElementById('progressSection');
+        const resultsSection = document.getElementById('resultsSection');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            loadHistory();
+        });
+
+        function setupEventListeners() {
+            // File upload handlers
+            uploadZone.addEventListener('click', () => fileInput.click());
+            uploadZone.addEventListener('dragover', handleDragOver);
+            uploadZone.addEventListener('dragleave', handleDragLeave);
+            uploadZone.addEventListener('drop', handleFileDrop);
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // Form submission
+            uploadForm.addEventListener('submit', handleFormSubmit);
+            
+            // Processing mode handler
+            const processingMode = document.getElementById('processingMode');
+            processingMode.addEventListener('change', handleProcessingModeChange);
+            
+            // Multi-speaker processing handler
+            const enableDiarization = document.getElementById('enableDiarization');
+            enableDiarization.addEventListener('change', handleDiarizationToggle);
+            
+            // Aya Arabic Enhancement handler
+            const enableAyaEnhancement = document.getElementById('enableAyaEnhancement');
+            enableAyaEnhancement.addEventListener('change', handleAyaEnhancementToggle);
+            
+            // Initialize processing mode display
+            handleProcessingModeChange();
+        }
+
+        function handleProcessingModeChange() {
+            const processingMode = document.getElementById('processingMode');
+            const modelSizeContainer = document.getElementById('modelSizeContainer');
+            const processingModeHelp = document.getElementById('processingModeHelp');
+            
+            if (processingMode.value === 'api') {
+                modelSizeContainer.style.opacity = '0.5';
+                document.getElementById('modelSize').disabled = true;
+                processingModeHelp.innerHTML = `
+                    <i class="fas fa-cloud text-primary"></i> 
+                    Uses OpenAI API - faster processing but requires API key
+                    <br><small class="text-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        API key required - <a href="/settings" class="text-warning fw-bold">Configure in Settings</a>
+                    </small>
+                    <br><small class="text-muted">
+                        <i class="fas fa-dollar-sign"></i> 
+                        Estimated cost: ~$0.006 per minute of audio
+                    </small>
+                `;
+            } else {
+                modelSizeContainer.style.opacity = '1';
+                document.getElementById('modelSize').disabled = false;
+                processingModeHelp.innerHTML = `
+                    <i class="fas fa-shield-alt text-success"></i> 
+                    Uses local Whisper models for complete privacy
+                `;
+            }
+        }
+
+        function handleDiarizationToggle() {
+            const enableDiarization = document.getElementById('enableDiarization');
+            const maxSpeakers = document.getElementById('maxSpeakers');
+            const voiceEnhancement = document.getElementById('voiceEnhancement');
+            const speakerProfiles = document.getElementById('speakerProfiles');
+            
+            const isEnabled = enableDiarization.checked;
+            
+            maxSpeakers.disabled = !isEnabled;
+            voiceEnhancement.disabled = !isEnabled;
+            speakerProfiles.disabled = !isEnabled;
+            
+            // Visual feedback
+            const card = enableDiarization.closest('.card');
+            if (isEnabled) {
+                card.classList.remove('border-info');
+                card.classList.add('border-success');
+                card.querySelector('.card-header').classList.remove('bg-info');
+                card.querySelector('.card-header').classList.add('bg-success');
+                card.querySelector('.text-info').classList.remove('text-info');
+                card.querySelector('h6').classList.add('text-success');
+            } else {
+                card.classList.remove('border-success');
+                card.classList.add('border-info');
+                card.querySelector('.card-header').classList.remove('bg-success');
+                card.querySelector('.card-header').classList.add('bg-info');
+                card.querySelector('h6').classList.remove('text-success');
+                card.querySelector('h6').classList.add('text-info');
+            }
+        }
+
+        function handleAyaEnhancementToggle() {
+            const enableAyaEnhancement = document.getElementById('enableAyaEnhancement');
+            const ayaBenefits = document.querySelector('.aya-benefits');
+            
+            const isEnabled = enableAyaEnhancement.checked;
+            
+            // Show/hide benefits
+            if (isEnabled) {
+                ayaBenefits.style.display = 'block';
+                ayaBenefits.style.animation = 'fadeIn 0.3s ease-in';
+            } else {
+                ayaBenefits.style.display = 'none';
+            }
+            
+            // Visual feedback
+            const card = enableAyaEnhancement.closest('.card');
+            if (isEnabled) {
+                card.classList.remove('border-warning');
+                card.classList.add('border-success');
+                card.querySelector('.card-header').classList.remove('bg-warning');
+                card.querySelector('.card-header').classList.add('bg-success');
+                card.querySelector('.text-warning').classList.remove('text-warning');
+                card.querySelector('h6').classList.add('text-success');
+                
+                // Add premium glow effect
+                card.style.boxShadow = '0 0 20px rgba(255, 193, 7, 0.3)';
+            } else {
+                card.classList.remove('border-success');
+                card.classList.add('border-warning');
+                card.querySelector('.card-header').classList.remove('bg-success');
+                card.querySelector('.card-header').classList.add('bg-warning');
+                card.querySelector('h6').classList.remove('text-success');
+                card.querySelector('h6').classList.add('text-warning');
+                
+                // Remove glow effect
+                card.style.boxShadow = '';
+            }
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+        }
+
+        function handleFileDrop(e) {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
+            }
+        }
+
+        function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            // Display file info
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.remove('d-none');
+            
+            // Enable submit button
+            submitBtn.disabled = false;
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(uploadForm);
+            
+            // Show progress section
+            progressSection.classList.remove('d-none');
+            resultsSection.classList.add('d-none');
+            submitBtn.disabled = true;
+            
+            // Upload file
+            uploadFile(formData);
+        }
+
+        async function uploadFile(formData) {
+            try {
+                updateProgress('Uploading file...', 10);
+                
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    currentJobId = result.job_id;
+                    startStatusChecking();
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+            } catch (error) {
+                showError('Upload failed: ' + error.message);
+                resetForm();
+            }
+        }
+
+        function startStatusChecking() {
+            statusCheckInterval = setInterval(checkStatus, 2000);
+        }
+
+        async function checkStatus() {
+            if (!currentJobId) return;
+
+            try {
+                const response = await fetch(`/status/${currentJobId}`);
+                const status = await response.json();
+                
+                if (status.status === 'processing') {
+                    updateProgress(status.message || 'Processing...', null, status);
+                } else if (status.status === 'completed') {
+                    clearInterval(statusCheckInterval);
+                    showResults(status);
+                } else if (status.status === 'failed') {
+                    clearInterval(statusCheckInterval);
+                    showError('Processing failed: ' + status.message);
+                    resetForm();
+                }
+            } catch (error) {
+                console.error('Status check failed:', error);
+            }
+        }
+
+        function updateProgress(message, percent = null, status = null) {
+            document.getElementById('progressLabel').textContent = message;
+            document.getElementById('progressDetails').textContent = message;
+            
+            if (percent !== null) {
+                const progressBar = document.getElementById('progressBar');
+                progressBar.style.width = percent + '%';
+                document.getElementById('progressPercent').textContent = percent + '%';
+            }
+            
+            // Show processing mode and fallback information
+            const processingModeInfo = document.getElementById('processingModeInfo');
+            const processingModeText = document.getElementById('processingModeText');
+            const fallbackAlert = document.getElementById('fallbackAlert');
+            
+            if (status && status.processing_info) {
+                processingModeInfo.classList.remove('d-none');
+                
+                const processingMode = status.processing_info.processing_mode || 'local';
+                const fallbackReason = status.processing_info.fallback_reason;
+                
+                if (fallbackReason) {
+                    // API fallback occurred
+                    fallbackAlert.className = 'alert alert-warning alert-sm border-0 p-2 small';
+                    processingModeText.innerHTML = `
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        API service unavailable - automatically switched to local processing for privacy and reliability.
+                        <div class="mt-1 small text-muted">Reason: ${fallbackReason}</div>
+                    `;
+                } else if (processingMode === 'api') {
+                    // API processing
+                    fallbackAlert.className = 'alert alert-info alert-sm border-0 p-2 small';
+                    processingModeText.innerHTML = `
+                        <i class="fas fa-cloud me-1"></i>
+                        Processing with OpenAI Whisper API for enhanced speed and accuracy.
+                    `;
+                } else {
+                    // Local processing
+                    fallbackAlert.className = 'alert alert-success alert-sm border-0 p-2 small';
+                    processingModeText.innerHTML = `
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Processing with local Whisper model - completely private and secure.
+                    `;
+                }
+            } else {
+                // Initial processing - show selected mode
+                const selectedMode = document.getElementById('processingMode').value;
+                processingModeInfo.classList.remove('d-none');
+                
+                if (selectedMode === 'api') {
+                    fallbackAlert.className = 'alert alert-info alert-sm border-0 p-2 small';
+                    processingModeText.innerHTML = `
+                        <i class="fas fa-cloud me-1"></i>
+                        Attempting OpenAI API processing...
+                    `;
+                } else {
+                    fallbackAlert.className = 'alert alert-success alert-sm border-0 p-2 small';
+                    processingModeText.innerHTML = `
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Processing with local Whisper model...
+                    `;
+                }
+            }
+        }
+
+        function showResults(status) {
+            progressSection.classList.add('d-none');
+            resultsSection.classList.remove('d-none');
+            
+            // Show transcript preview
+            const transcriptData = status.results?.transcript_data;
+            const transcriptPreview = document.getElementById('transcriptPreview');
+            
+            if (transcriptData?.multi_speaker) {
+                // Multi-speaker display
+                const speakers = transcriptData.speakers || [];
+                const totalSpeakers = transcriptData.total_speakers || 1;
+                
+                let previewHtml = `
+                    <div class="multi-speaker-preview">
+                        <div class="alert alert-info mb-3">
+                            <h6><i class="fas fa-users me-2"></i>Multi-Speaker Audio Detected</h6>
+                            <small>Found ${totalSpeakers} speaker(s) in the audio</small>
+                        </div>
+                `;
+                
+                // Combined transcript preview
+                const combinedText = transcriptData.combined_transcript || '';
+                if (combinedText) {
+                    previewHtml += `
+                        <div class="mb-3">
+                            <h6>Combined Transcript Preview:</h6>
+                            <div class="transcript-preview bg-light p-3 rounded">
+                                ${combinedText.substring(0, 300)}${combinedText.length > 300 ? '...' : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Individual speakers preview
+                if (speakers.length > 0) {
+                    previewHtml += '<div class="speakers-preview">';
+                    previewHtml += '<h6>Individual Speakers:</h6>';
+                    
+                    speakers.forEach((speaker, index) => {
+                        const speakerText = speaker.transcript || '';
+                        const duration = speaker.duration || 0;
+                        const confidence = Math.round((speaker.confidence || 0) * 100);
+                        
+                        previewHtml += `
+                            <div class="speaker-card border rounded p-2 mb-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="text-primary">${speaker.speaker_label}</strong>
+                                    <small class="text-muted">
+                                        ${duration.toFixed(1)}s • ${confidence}% confidence
+                                    </small>
+                                </div>
+                                <div class="speaker-text text-muted small mt-1">
+                                    ${speakerText.substring(0, 100)}${speakerText.length > 100 ? '...' : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    previewHtml += '</div>';
+                }
+                
+                previewHtml += '</div>';
+                transcriptPreview.innerHTML = previewHtml;
+                
+            } else {
+                // Single speaker display
+                const transcript = transcriptData?.text || 'No transcript available';
+                transcriptPreview.innerHTML = `
+                    <div class="single-speaker-preview">
+                        <div class="transcript-text">
+                            ${transcript.substring(0, 300)}${transcript.length > 300 ? '...' : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Generate download buttons
+            const downloadButtons = document.getElementById('downloadButtons');
+            downloadButtons.innerHTML = '';
+            
+            Object.keys(status.results || {}).forEach(format => {
+                const btn = document.createElement('a');
+                btn.href = `/download/${currentJobId}/${format}`;
+                btn.className = 'btn btn-outline-primary me-2 mb-2';
+                btn.innerHTML = `<i class="fas fa-download me-1"></i>Download ${format.toUpperCase()}`;
+                downloadButtons.appendChild(btn);
+            });
+            
+            resetForm();
+            loadHistory();
+        }
+
+        function showError(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show mt-3';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            uploadForm.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        function resetForm() {
+            submitBtn.disabled = true;
+            fileInfo.classList.add('d-none');
+            fileInput.value = '';
+            currentJobId = null;
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history');
+                const history = await response.json();
+                
+                const historyList = document.getElementById('historyList');
+                
+                if (history.length === 0) {
+                    historyList.innerHTML = `
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-clock fa-2x mb-3"></i>
+                            <p>No processing history yet. Upload your first file to get started!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                historyList.innerHTML = history.map(job => `
+                    <div class="history-item p-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator status-${job.status}"></span>
+                                    <strong>${job.original_filename}</strong>
+                                    <span class="badge bg-secondary ms-2">${job.status}</span>
+                                </div>
+                                <small class="text-muted">
+                                    Created: ${new Date(job.created_at).toLocaleString()}
+                                    ${job.completed_at ? '• Completed: ' + new Date(job.completed_at).toLocaleString() : ''}
+                                </small>
+                            </div>
+                            <div>
+                                ${job.status === 'completed' ? 
+                                    `<a href="/download/${job.job_id}/txt" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-download me-1"></i>Download
+                                    </a>` : 
+                                    job.status === 'processing' ?
+                                    `<button class="btn btn-sm btn-outline-warning" onclick="checkJobStatus('${job.job_id}')">
+                                        <i class="fas fa-sync-alt me-1"></i>Check Status
+                                    </button>` : ''
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Failed to load history:', error);
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function checkJobStatus(jobId) {
+            currentJobId = jobId;
+            startStatusChecking();
+        }
+
+        // LLM Model Management
+        async function loadLlmModels() {
+            try {
+                const response = await fetch('/api/v1/models');
+                const data = await response.json();
+                
+                const llmModelSelect = document.getElementById('llmModel');
+                llmModelSelect.innerHTML = '<option value="">Select AI Model...</option>';
+                
+                if (data.error) {
+                    llmModelSelect.innerHTML = '<option value="">LLM not available</option>';
+                    document.getElementById('llmStatus').classList.remove('d-none');
+                    document.getElementById('llmStatusText').textContent = 'LLM service not available: ' + data.error;
+                    return;
+                }
+
+                // Add available models
+                if (data.available_models && data.available_models.length > 0) {
+                    data.available_models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.name;
+                        option.textContent = `${model.name} (${formatModelSize(model.size)})`;
+                        llmModelSelect.appendChild(option);
+                    });
+                }
+
+                // Add recommended models that aren't installed
+                if (data.recommended_models) {
+                    data.recommended_models.forEach(model => {
+                        if (!model.installed) {
+                            const option = document.createElement('option');
+                            option.value = model.name;
+                            option.textContent = `${model.name} - ${model.size} (Not Installed)`;
+                            option.disabled = true;
+                            option.className = 'text-muted';
+                            llmModelSelect.appendChild(option);
+                        }
+                    });
+                }
+
+                // Show status
+                updateLlmStatus(data);
+                
+            } catch (error) {
+                console.error('Failed to load LLM models:', error);
+                document.getElementById('llmStatus').classList.remove('d-none');
+                document.getElementById('llmStatusText').textContent = 'Failed to load models: ' + error.message;
+            }
+        }
+
+        function formatModelSize(size) {
+            if (typeof size === 'number') {
+                return formatFileSize(size);
+            }
+            return size || 'Unknown size';
+        }
+
+        function updateLlmStatus(data) {
+            const statusDiv = document.getElementById('llmStatus');
+            const statusText = document.getElementById('llmStatusText');
+            
+            if (data.ollama_status?.running) {
+                statusDiv.className = 'alert alert-success alert-sm';
+                statusText.innerHTML = `<i class="fas fa-check-circle me-2"></i>LLM Ready - ${data.statistics.total_available} models available (${data.statistics.total_installed_size_gb} GB)`;
+            } else {
+                statusDiv.className = 'alert alert-warning alert-sm';
+                statusText.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>LLM service not running`;
+            }
+            
+            statusDiv.classList.remove('d-none');
+        }
+
+        // Model management modal
+        function showModelManagement() {
+            // Create modal HTML
+            const modalHtml = `
+                <div class="modal fade" id="modelManagementModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-brain me-2"></i>LLM Model Management
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="modelManagementContent">
+                                    <div class="text-center">
+                                        <div class="spinner-border" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-2">Loading model information...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById('modelManagementModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Add modal to page
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Show modal and load content
+            const modal = new bootstrap.Modal(document.getElementById('modelManagementModal'));
+            modal.show();
+            
+            loadModelManagementContent();
+        }
+
+        async function loadModelManagementContent() {
+            try {
+                const response = await fetch('/api/v1/models');
+                const data = await response.json();
+                
+                const content = document.getElementById('modelManagementContent');
+                
+                if (data.error) {
+                    content.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error loading models: ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = `
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-info-circle me-2"></i>Model Statistics
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row text-center">
+                                        <div class="col-md-3">
+                                            <div class="h4 text-primary">${data.statistics.total_available}</div>
+                                            <small class="text-muted">Installed</small>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="h4 text-success">${data.statistics.recommended_installed}</div>
+                                            <small class="text-muted">Recommended</small>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="h4 text-info">${data.statistics.total_installed_size_gb} GB</div>
+                                            <small class="text-muted">Total Size</small>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="h4 ${data.ollama_status.running ? 'text-success' : 'text-danger'}">
+                                                <i class="fas fa-${data.ollama_status.running ? 'check' : 'times'}-circle"></i>
+                                            </div>
+                                            <small class="text-muted">Status</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-success mb-3">
+                                <i class="fas fa-download me-2"></i>Recommended for Arabic STT
+                            </h6>
+                `;
+
+                // Recommended models
+                if (data.recommended_models && data.recommended_models.length > 0) {
+                    data.recommended_models.forEach(model => {
+                        const isInstalled = model.installed;
+                        html += `
+                            <div class="card mb-2 ${isInstalled ? 'border-success' : 'border-secondary'}">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-1">
+                                                ${model.name}
+                                                ${isInstalled ? '<span class="badge bg-success ms-2">Installed</span>' : ''}
+                                            </h6>
+                                            <small class="text-muted">${model.description}</small><br>
+                                            <small class="text-primary">${model.purpose} • ${model.size}</small>
+                                        </div>
+                                        <div>
+                                            ${isInstalled 
+                                                ? '<button class="btn btn-sm btn-success" disabled><i class="fas fa-check"></i></button>'
+                                                : `<button class="btn btn-sm btn-outline-primary" onclick="installModel('${model.name}')">
+                                                     <i class="fas fa-download me-1"></i>Install
+                                                   </button>`
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += '<div class="text-muted">No recommended models available</div>';
+                }
+
+                html += `
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-check-circle me-2"></i>Currently Installed
+                            </h6>
+                `;
+
+                // Installed models
+                if (data.available_models && data.available_models.length > 0) {
+                    data.available_models.forEach(model => {
+                        html += `
+                            <div class="card mb-2 border-primary">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-1">${model.name}</h6>
+                                            <small class="text-muted">Size: ${formatModelSize(model.size)}</small>
+                                            ${model.details ? `<br><small class="text-info">${model.details.family} • ${model.details.parameter_size}</small>` : ''}
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-success" onclick="setDefaultModel('${model.name}')">
+                                                <i class="fas fa-star me-1"></i>Set Default
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += '<div class="text-muted">No models currently installed</div>';
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+
+                content.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Failed to load model management content:', error);
+                document.getElementById('modelManagementContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Failed to load model information: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function installModel(modelName) {
+            try {
+                const response = await fetch('/api/v1/models/install', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: modelName })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(`Installation of ${modelName} started. This may take several minutes.`);
+                    // Refresh the model list
+                    setTimeout(() => {
+                        loadModelManagementContent();
+                        loadLlmModels();
+                    }, 2000);
+                } else {
+                    alert(`Failed to install ${modelName}: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`Installation failed: ${error.message}`);
+            }
+        }
+
+        async function setDefaultModel(modelName) {
+            try {
+                const response = await fetch('/api/v1/models/set-default', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: modelName })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(`Default model set to ${modelName}`);
+                    // Update the model selector
+                    document.getElementById('llmModel').value = modelName;
+                } else {
+                    alert(`Failed to set default model: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`Failed to set default model: ${error.message}`);
+            }
+        }
+
+        // Initialize LLM functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLlmModels();
+            
+            // Add event listener for manage models button
+            document.getElementById('manageLlmModels').addEventListener('click', showModelManagement);
+            
+            // Add event listeners for enhancement/analysis toggle
+            document.getElementById('enableEnhancement').addEventListener('change', function() {
+                const options = document.querySelectorAll('.enhancement-options input');
+                options.forEach(option => {
+                    option.disabled = !this.checked;
+                });
+            });
+            
+            document.getElementById('enableAnalysis').addEventListener('change', function() {
+                const options = document.querySelectorAll('.analysis-options input');
+                options.forEach(option => {
+                    option.disabled = !this.checked;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

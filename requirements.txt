@@ -1,0 +1,71 @@
+# Requirements file for Ultimate Arabic Transcription Engine
+
+# Core web framework
+Flask==2.3.3
+Flask-CORS==4.0.0
+Werkzeug==2.3.7
+
+# Core Whisper and audio processing
+openai-whisper>=20231117
+torch>=2.0.0
+torchaudio>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+librosa>=0.10.0
+soundfile>=0.12.0
+pydub>=0.25.0
+
+# Advanced ML and NLP
+transformers>=4.35.0
+accelerate>=0.24.0
+datasets>=2.14.0
+evaluate>=0.4.0
+jiwer>=3.0.0
+
+# Arabic language processing
+arabic-reshaper>=3.0.0
+python-bidi>=0.4.2
+langdetect>=1.0.9
+regex>=2023.8.8
+
+# Progress and visualization
+tqdm>=4.66.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+pandas>=2.1.0
+plotly>=5.17.0
+
+# Alternative interfaces (optional)
+gradio>=4.0.0
+streamlit>=1.28.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Utilities and monitoring
+requests>=2.31.0
+psutil>=5.9.0
+memory_profiler>=0.61.0
+py-cpuinfo>=9.0.0
+
+# Additional audio processing
+ffmpeg-python>=0.2.0
+
+# API support for future integrations
+aiohttp>=3.8.0
+aiofiles>=23.1.0
+openai>=1.3.0
+
+# Security
+cryptography>=41.0.0
+
+# Development and testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Optional: GPU monitoring (install if GPU available)
+# GPUtil>=1.4.0
+
+# Note: The following are built-in Python modules and don't need installation:
+# sqlite3, asyncio, pathlib, uuid, datetime, json, logging, os, shutil, tempfile, typing
+black>=23.0.0
+flake8>=6.0.0

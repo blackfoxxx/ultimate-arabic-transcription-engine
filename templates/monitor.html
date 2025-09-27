@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Monitor - Arabic STT Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .refresh-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(45deg, #95a5a6, #7f8c8d);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #27ae60, #2ecc71);
+        }
+
+        .status-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border-left: 5px solid #3498db;
+        }
+
+        .status-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+
+        .status-card.completed {
+            border-left-color: #27ae60;
+            background: linear-gradient(135deg, #f8fff9 0%, #f0fff4 100%);
+        }
+
+        .status-card.failed {
+            border-left-color: #e74c3c;
+            background: linear-gradient(135deg, #fdf8f8 0%, #fef5f5 100%);
+        }
+
+        .status-card.processing {
+            border-left-color: #f39c12;
+            background: linear-gradient(135deg, #fffbf0 0%, #fff8e1 100%);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.01); }
+        }
+
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .job-title {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .job-id {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            font-family: 'Monaco', monospace;
+            margin-bottom: 5px;
+        }
+
+        .job-filename {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .job-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .job-actions .btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .job-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #34495e;
+            min-width: 80px;
+        }
+
+        .info-value {
+            flex: 1;
+            color: #2c3e50;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-processing {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-fill.processing {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+            animation: progress-glow 2s infinite;
+        }
+
+        @keyframes progress-glow {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .job-details {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .job-details.show {
+            display: block;
+        }
+
+        .detail-section {
+            margin-bottom: 15px;
+        }
+
+        .detail-section h4 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .detail-content {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #dee2e6;
+        }
+
+        .file-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            font-size: 0.9em;
+        }
+
+        .no-jobs {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .no-jobs h3 {
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+
+        .no-jobs p {
+            color: #95a5a6;
+        }
+
+        .refresh-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: #e8f4f8;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: #2980b9;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #3498db;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .debug-info {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85em;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .job-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .refresh-controls {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Job Monitor</h1>
+            <p class="subtitle">Real-time monitoring of transcription jobs</p>
+        </div>
+
+        <div class="controls">
+            <div class="refresh-controls">
+                <button class="btn" onclick="refreshJobs()" id="refresh-btn">
+                    <span>🔄</span> Refresh
+                </button>
+                <button class="btn btn-secondary" onclick="toggleAutoRefresh()" id="auto-refresh-btn">
+                    <span>⏸️</span> Pause Auto-refresh
+                </button>
+                <span class="refresh-indicator" id="refresh-indicator" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Refreshing...</span>
+                </span>
+            </div>
+            
+            <div class="refresh-controls">
+                <button class="btn btn-danger" onclick="clearCompletedJobs()">
+                    <span>🧹</span> Clear Completed
+                </button>
+                <a href="/" class="btn btn-success">
+                    <span>🏠</span> Back to Home
+                </a>
+            </div>
+        </div>
+
+        <div id="error-container"></div>
+        <div id="jobs-container">
+            <div class="no-jobs">
+                <h3>Loading jobs...</h3>
+                <p>Please wait while we fetch the latest job information.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        let autoRefreshEnabled = true;
+        const REFRESH_INTERVAL = 3000; // 3 seconds
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshJobs();
+            startAutoRefresh();
+        });
+
+        // Auto-refresh functionality
+        function startAutoRefresh() {
+            if (autoRefreshEnabled) {
+                autoRefreshInterval = setInterval(refreshJobs, REFRESH_INTERVAL);
+            }
+        }
+
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('auto-refresh-btn');
+            if (autoRefreshEnabled) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshEnabled = false;
+                btn.innerHTML = '<span>▶️</span> Resume Auto-refresh';
+                btn.classList.add('btn-success');
+                btn.classList.remove('btn-secondary');
+            } else {
+                autoRefreshEnabled = true;
+                startAutoRefresh();
+                btn.innerHTML = '<span>⏸️</span> Pause Auto-refresh';
+                btn.classList.add('btn-secondary');
+                btn.classList.remove('btn-success');
+            }
+        }
+
+        // Fetch and display jobs
+        async function refreshJobs() {
+            const indicator = document.getElementById('refresh-indicator');
+            const refreshBtn = document.getElementById('refresh-btn');
+            
+            try {
+                indicator.style.display = 'inline-flex';
+                refreshBtn.disabled = true;
+                
+                const response = await fetch('/api/jobs/all');
+                const jobs = await response.json();
+                
+                displayJobs(jobs);
+                clearError();
+                
+            } catch (error) {
+                console.error('Error fetching jobs:', error);
+                showError('Failed to fetch job data. Please check your connection.');
+            } finally {
+                indicator.style.display = 'none';
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // Display jobs in the UI
+        function displayJobs(jobs) {
+            const container = document.getElementById('jobs-container');
+            
+            if (!jobs || jobs.length === 0) {
+                container.innerHTML = `
+                    <div class="no-jobs">
+                        <h3>No jobs found</h3>
+                        <p>No transcription jobs are currently running or completed.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort jobs by creation date (newest first)
+            jobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            const jobsHTML = jobs.map(job => createJobCard(job)).join('');
+            container.innerHTML = jobsHTML;
+        }
+
+        // Create individual job card
+        function createJobCard(job) {
+            const statusClass = getStatusClass(job.status);
+            const statusBadge = getStatusBadge(job.status);
+            const progress = calculateProgress(job);
+            const duration = calculateDuration(job.created_at);
+            const fileSize = getFileSize(job);
+
+            return `
+                <div class="status-card ${statusClass}">
+                    <div class="job-header">
+                        <div class="job-title">
+                            <div class="job-id">${job.job_id}</div>
+                            <div class="job-filename">${job.original_filename || 'Unknown file'}</div>
+                            ${statusBadge}
+                        </div>
+                        <div class="job-actions">
+                            <button class="btn" onclick="toggleDetails('${job.job_id}')">
+                                <span>📋</span> Details
+                            </button>
+                            <button class="btn btn-secondary" onclick="debugJob('${job.job_id}')">
+                                <span>🔍</span> Debug
+                            </button>
+                            ${job.status === 'completed' ? `
+                                <button class="btn btn-success" onclick="downloadResults('${job.job_id}')">
+                                    <span>⬇️</span> Download
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="progress-bar">
+                        <div class="progress-fill ${job.status}" style="width: ${progress}%"></div>
+                    </div>
+                    
+                    <div class="job-info">
+                        <div class="info-item">
+                            <span class="info-label">Status:</span>
+                            <span class="info-value">${job.message || job.status}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Duration:</span>
+                            <span class="info-value">${duration}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Created:</span>
+                            <span class="info-value">${formatDate(job.created_at)}</span>
+                        </div>
+                        ${fileSize ? `
+                        <div class="info-item">
+                            <span class="info-label">File Size:</span>
+                            <span class="info-value">${fileSize}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="job-details" id="details-${job.job_id}">
+                        <div class="detail-section">
+                            <h4>Processing Information</h4>
+                            <div class="detail-content">
+                                <div class="file-info">
+                                    <div><strong>Mode:</strong> ${job.processing_info?.processing_mode || 'Unknown'}</div>
+                                    <div><strong>Model:</strong> ${job.processing_info?.model_used || 'Unknown'}</div>
+                                    <div><strong>Processing Time:</strong> ${job.processing_info?.processing_time ? Math.round(job.processing_info.processing_time) + 's' : 'N/A'}</div>
+                                    ${job.processing_info?.fallback_reason ? `<div><strong>Fallback:</strong> ${job.processing_info.fallback_reason}</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="detail-section">
+                            <h4>Job Options</h4>
+                            <div class="detail-content">
+                                <div class="file-info">
+                                    <div><strong>Language:</strong> ${job.options?.language || 'auto'}</div>
+                                    <div><strong>Noise Reduction:</strong> ${job.options?.noise_reduction || 'auto'}</div>
+                                    <div><strong>Output Formats:</strong> ${job.options?.output_formats?.join(', ') || 'txt, srt'}</div>
+                                    <div><strong>Model Size:</strong> ${job.options?.model_size || 'medium'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${job.status === 'completed' && job.files ? `
+                        <div class="detail-section">
+                            <h4>Output Files</h4>
+                            <div class="detail-content">
+                                <div class="file-info">
+                                    ${Object.entries(job.files).map(([format, path]) => `
+                                        <div><strong>${format.toUpperCase()}:</strong> <a href="/download/${job.job_id}/${format}">${path.split('/').pop()}</a></div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Utility functions
+        function getStatusClass(status) {
+            switch (status) {
+                case 'completed': return 'completed';
+                case 'failed': return 'failed';
+                case 'processing': return 'processing';
+                default: return '';
+            }
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'processing': '<span class="status-badge status-processing">🔄 Processing</span>',
+                'completed': '<span class="status-badge status-completed">✅ Completed</span>',
+                'failed': '<span class="status-badge status-failed">❌ Failed</span>'
+            };
+            return badges[status] || `<span class="status-badge">${status}</span>`;
+        }
+
+        function calculateProgress(job) {
+            switch (job.status) {
+                case 'completed': return 100;
+                case 'failed': return 0;
+                case 'processing': 
+                    // Estimate progress based on duration and file characteristics
+                    const duration = (new Date() - new Date(job.created_at)) / 1000 / 60; // minutes
+                    return Math.min(Math.round(duration * 5), 95); // Rough estimate
+                default: return 0;
+            }
+        }
+
+        function calculateDuration(createdAt) {
+            const now = new Date();
+            const created = new Date(createdAt);
+            const diffMs = now - created;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            
+            if (diffHours > 0) {
+                return `${diffHours}h ${diffMins % 60}m`;
+            } else {
+                return `${diffMins}m`;
+            }
+        }
+
+        function formatDate(dateStr) {
+            return new Date(dateStr).toLocaleString();
+        }
+
+        function getFileSize(job) {
+            // This would need to be provided by the backend
+            return null;
+        }
+
+        // Interactive functions
+        function toggleDetails(jobId) {
+            const details = document.getElementById(`details-${jobId}`);
+            details.classList.toggle('show');
+        }
+
+        async function debugJob(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}/debug`);
+                const debugInfo = await response.json();
+                
+                // Show debug info in a modal or detailed view
+                showDebugInfo(jobId, debugInfo);
+                
+            } catch (error) {
+                console.error('Debug failed:', error);
+                alert('Failed to fetch debug information');
+            }
+        }
+
+        function showDebugInfo(jobId, debugInfo) {
+            const debugHTML = `
+                <div class="detail-section">
+                    <h4>Debug Information for ${jobId}</h4>
+                    <div class="debug-info">${JSON.stringify(debugInfo, null, 2)}</div>
+                </div>
+            `;
+            
+            // Add to the job details or show in a modal
+            const details = document.getElementById(`details-${jobId}`);
+            if (details) {
+                details.innerHTML += debugHTML;
+                details.classList.add('show');
+            }
+        }
+
+        function downloadResults(jobId) {
+            window.open(`/download/${jobId}/txt`, '_blank');
+        }
+
+        async function clearCompletedJobs() {
+            if (confirm('Are you sure you want to clear all completed jobs?')) {
+                try {
+                    const response = await fetch('/api/jobs/clear-completed', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        refreshJobs();
+                    } else {
+                        throw new Error('Failed to clear jobs');
+                    }
+                } catch (error) {
+                    console.error('Clear failed:', error);
+                    showError('Failed to clear completed jobs');
+                }
+            }
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+
+        function clearError() {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = '';
+        }
+    </script>
+</body>
+</html>

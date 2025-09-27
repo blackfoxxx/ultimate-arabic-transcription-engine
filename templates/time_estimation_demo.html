@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Estimation Demo - Arabic STT Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #2c5530, #4a7c59);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1.5rem;
+        }
+        
+        .estimation-result {
+            background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        
+        .time-display {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c5530;
+        }
+        
+        .confidence-bar {
+            height: 10px;
+            border-radius: 5px;
+            background: #e9ecef;
+            overflow: hidden;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #fd7e14, #198754);
+            transition: width 0.5s ease;
+        }
+        
+        .factor-badge {
+            background: rgba(44, 85, 48, 0.1);
+            color: #2c5530;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin: 0.25rem;
+            display: inline-block;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-4">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <!-- Header -->
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h2><i class="fas fa-clock me-2"></i>Time Estimation Engine Demo</h2>
+                        <p class="mb-0">Test processing time predictions for different configurations</p>
+                    </div>
+                </div>
+
+                <!-- Input Configuration -->
+                <div class="card">
+                    <div class="card-header">
+                        <h4><i class="fas fa-cog me-2"></i>Configuration</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="estimationForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">File Duration (minutes)</label>
+                                        <input type="number" class="form-control" id="fileDuration" value="5" step="0.5" min="0.1">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">File Size (MB)</label>
+                                        <input type="number" class="form-control" id="fileSize" value="50" step="1" min="1">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Processing Mode</label>
+                                        <select class="form-select" id="processingMode">
+                                            <option value="local">Local Processing</option>
+                                            <option value="api">API Processing (OpenAI)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Model Size</label>
+                                        <select class="form-select" id="modelSize">
+                                            <option value="tiny">Tiny (Fastest)</option>
+                                            <option value="base">Base (Fast)</option>
+                                            <option value="small">Small (Balanced)</option>
+                                            <option value="medium" selected>Medium (Recommended)</option>
+                                            <option value="large">Large (Most Accurate)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="multiSpeaker">
+                                            <label class="form-check-label" for="multiSpeaker">
+                                                Multi-Speaker Processing
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Noise Reduction</label>
+                                        <select class="form-select" id="noiseReduction">
+                                            <option value="none">None</option>
+                                            <option value="auto" selected>Auto</option>
+                                            <option value="rnnoise">RNNoise AI</option>
+                                            <option value="traditional">Traditional Filters</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button type="button" class="btn btn-primary btn-lg" onclick="getEstimation()">
+                                    <i class="fas fa-calculator me-2"></i>Calculate Time Estimate
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="card" id="resultsCard" style="display: none;">
+                    <div class="card-header">
+                        <h4><i class="fas fa-chart-line me-2"></i>Estimation Results</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="estimationResults"></div>
+                    </div>
+                </div>
+
+                <!-- Performance Stats -->
+                <div class="card" id="statsCard">
+                    <div class="card-header">
+                        <h4><i class="fas fa-analytics me-2"></i>Performance Statistics</h4>
+                        <button class="btn btn-sm btn-outline-light float-end" onclick="loadPerformanceStats()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="performanceStats">
+                            <div class="text-center">
+                                <button class="btn btn-outline-primary" onclick="loadPerformanceStats()">
+                                    <i class="fas fa-chart-bar me-2"></i>Load Performance Statistics
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function getEstimation() {
+            const duration = parseFloat(document.getElementById('fileDuration').value) * 60; // Convert to seconds
+            const size = parseInt(document.getElementById('fileSize').value) * 1024 * 1024; // Convert to bytes
+            const mode = document.getElementById('processingMode').value;
+            const model = document.getElementById('modelSize').value;
+            const multiSpeaker = document.getElementById('multiSpeaker').checked;
+            const noiseReduction = document.getElementById('noiseReduction').value;
+            
+            const payload = {
+                file_duration: duration,
+                file_size: size,
+                model_size: model,
+                processing_mode: mode,
+                options: {
+                    multi_speaker: multiSpeaker,
+                    noise_reduction: noiseReduction,
+                    word_timestamps: true
+                }
+            };
+            
+            try {
+                const response = await fetch('/api/estimate-time', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                displayResults(result);
+                
+            } catch (error) {
+                console.error('Estimation failed:', error);
+                document.getElementById('estimationResults').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Estimation failed: ${error.message}
+                    </div>
+                `;
+                document.getElementById('resultsCard').style.display = 'block';
+            }
+        }
+        
+        function displayResults(result) {
+            const confidence = result.confidence_percentage || 50;
+            const speedRatio = result.processing_speed_ratio || 1;
+            const factors = result.factors || {};
+            
+            // Calculate cost if API mode
+            const costInfo = result.estimated_cost_usd ? `
+                <div class="col-md-6">
+                    <div class="card bg-warning bg-opacity-10">
+                        <div class="card-body text-center">
+                            <h5><i class="fas fa-dollar-sign"></i> Estimated Cost</h5>
+                            <div class="time-display text-warning">$${result.estimated_cost_usd}</div>
+                            <small class="text-muted">
+                                ${result.billable_minutes} minutes @ $${result.cost_per_minute}/min
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            ` : '';
+            
+            const html = `
+                <div class="estimation-result">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-success bg-opacity-10">
+                                <div class="card-body text-center">
+                                    <h5><i class="fas fa-clock"></i> Estimated Time</h5>
+                                    <div class="time-display">${result.estimated_time_formatted}</div>
+                                    <small class="text-muted">
+                                        Range: ${Math.round(result.min_estimate_seconds/60)} - ${Math.round(result.max_estimate_seconds/60)} minutes
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${costInfo}
+                        
+                        <div class="col-md-6">
+                            <div class="card bg-info bg-opacity-10">
+                                <div class="card-body text-center">
+                                    <h5><i class="fas fa-tachometer-alt"></i> Processing Speed</h5>
+                                    <div class="time-display text-info">${speedRatio}x</div>
+                                    <small class="text-muted">
+                                        ${speedRatio > 1 ? 'Faster than' : speedRatio < 1 ? 'Slower than' : 'Equal to'} real-time
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-chart-bar me-2"></i>Confidence Level</h6>
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" style="width: ${confidence}%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2">
+                                        <small>Low</small>
+                                        <strong>${confidence}% Confident</strong>
+                                        <small>High</small>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <h6><i class="fas fa-info-circle me-2"></i>Details</h6>
+                                        <p><strong>Hardware:</strong> ${result.hardware_profile}</p>
+                                        <p><strong>Historical Jobs:</strong> ${result.historical_jobs} similar configurations</p>
+                                        <p><strong>Expected Completion:</strong> ${result.estimated_completion}</p>
+                                        
+                                        <h6 class="mt-3"><i class="fas fa-cogs me-2"></i>Processing Factors</h6>
+                                        <div class="mt-2">
+                                            ${Object.entries(factors).map(([key, value]) => 
+                                                `<span class="factor-badge">${key.replace('_', ' ')}: ${(value * 100).toFixed(0)}%</span>`
+                                            ).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('estimationResults').innerHTML = html;
+            document.getElementById('resultsCard').style.display = 'block';
+        }
+        
+        async function loadPerformanceStats() {
+            try {
+                const response = await fetch('/api/performance-stats');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const stats = await response.json();
+                displayPerformanceStats(stats);
+                
+            } catch (error) {
+                console.error('Failed to load performance stats:', error);
+                document.getElementById('performanceStats').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Failed to load performance statistics: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function displayPerformanceStats(stats) {
+            if (stats.error) {
+                document.getElementById('performanceStats').innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No performance data available yet. Process some files to see statistics.
+                    </div>
+                `;
+                return;
+            }
+            
+            const overall = stats.overall || {};
+            const byModel = stats.by_model || [];
+            const byHardware = stats.by_hardware || [];
+            const hardware = stats.current_hardware || {};
+            
+            const html = `
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card bg-primary bg-opacity-10">
+                            <div class="card-body text-center">
+                                <h5>Total Jobs</h5>
+                                <div class="h2 text-primary">${overall.total_jobs || 0}</div>
+                                <small class="text-muted">Last 30 days</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card bg-success bg-opacity-10">
+                            <div class="card-body text-center">
+                                <h5>Avg Accuracy</h5>
+                                <div class="h2 text-success">${((overall.avg_accuracy || 1) * 100).toFixed(0)}%</div>
+                                <small class="text-muted">Estimation accuracy</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card bg-info bg-opacity-10">
+                            <div class="card-body text-center">
+                                <h5>Avg Duration</h5>
+                                <div class="h2 text-info">${Math.round(overall.avg_file_duration || 0)}s</div>
+                                <small class="text-muted">File duration</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="fas fa-microchip me-2"></i>Current Hardware</h6>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Profile:</strong> ${hardware.profile || 'Unknown'}</p>
+                                <p><strong>CPU Cores:</strong> ${hardware.cpu_count || 'N/A'}</p>
+                                <p><strong>Memory:</strong> ${hardware.memory_total ? Math.round(hardware.memory_total/1e9) + 'GB' : 'N/A'}</p>
+                                <p><strong>GPU:</strong> ${hardware.gpu_available ? 'Available' : 'Not Available'}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="fas fa-chart-bar me-2"></i>Performance by Model</h6>
+                            </div>
+                            <div class="card-body">
+                                ${byModel.length ? byModel.slice(0, 5).map(model => `
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>${model.model_size} (${model.processing_mode})</span>
+                                        <span class="text-success">${(model.avg_speed_ratio || 1).toFixed(1)}x</span>
+                                    </div>
+                                `).join('') : '<p class="text-muted">No model data available</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('performanceStats').innerHTML = html;
+        }
+        
+        // Auto-adjust model options based on processing mode
+        document.getElementById('processingMode').addEventListener('change', function() {
+            const modelSelect = document.getElementById('modelSize');
+            if (this.value === 'api') {
+                modelSelect.innerHTML = '<option value="whisper-1" selected>OpenAI Whisper-1</option>';
+            } else {
+                modelSelect.innerHTML = `
+                    <option value="tiny">Tiny (Fastest)</option>
+                    <option value="base">Base (Fast)</option>
+                    <option value="small">Small (Balanced)</option>
+                    <option value="medium" selected>Medium (Recommended)</option>
+                    <option value="large">Large (Most Accurate)</option>
+                `;
+            }
+        });
+        
+        // Load performance stats on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPerformanceStats();
+        });
+    </script>
+</body>
+</html>
