@@ -265,7 +265,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/arabic-transcription-engine/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/arabic-transcription-engine/discussions)
-- **Email**: your.email@example.com
+- **Email**: ahmed.j.iq@gmail.com
 
 ---
 
