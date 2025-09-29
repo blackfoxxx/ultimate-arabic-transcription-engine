@@ -40,7 +40,7 @@ ffmpeg
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/arabic-transcription-engine.git
+git clone https://github.com/blackfoxxx/arabic-transcription-engine.git
 cd arabic-transcription-engine
 
 # Install dependencies
