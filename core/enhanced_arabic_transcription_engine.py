@@ -83,8 +83,12 @@ class EnhancedArabicTranscriptionEngine:
             logger.warning(f"Audio preprocessing failed, using original: {e}")
             return audio_path
     
-    async def load_model(self, model_size: str = 'medium') -> None:
+    async def load_model(self, model_size: str = None) -> None:
         """Load Whisper model optimized for Arabic."""
+        # Use config default if no model_size provided
+        if model_size is None:
+            model_size = self.config.ENHANCED_ARABIC_MODEL_SIZE
+            
         try:
             if self.model is None or self.current_model_size != model_size:
                 logger.info(f"🔄 Loading Arabic-optimized Whisper model: {model_size}")
@@ -120,7 +124,7 @@ class EnhancedArabicTranscriptionEngine:
     async def transcribe_arabic(
         self,
         audio_path: str,
-        model_size: str = 'medium',
+        model_size: str = None,
         enable_preprocessing: bool = True,
         **kwargs
     ) -> Dict[str, Any]:

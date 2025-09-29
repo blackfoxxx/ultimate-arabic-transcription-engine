@@ -113,7 +113,7 @@
                                         <i class="fas fa-pause me-2"></i>Pause Auto-refresh
                                     </button>
                                     <span class="auto-refresh-indicator" id="refresh-status">
-                                        Auto-refreshing every 3 seconds
+                                        Auto-refreshing every 10 seconds
                                     </span>
                                 </div>
                             </div>
@@ -222,7 +222,9 @@
     <script>
         let autoRefreshInterval;
         let autoRefreshEnabled = true;
-        const REFRESH_INTERVAL = 3000; // 3 seconds
+        const REFRESH_INTERVAL = 10000; // 10 seconds (reduced from 3 seconds)
+        let failedRequestCount = 0;
+        const MAX_FAILED_REQUESTS = 3;
 
         // Global variable to store all jobs for filtering
         let allJobs = [];
@@ -257,11 +259,12 @@
                 status.textContent = 'Auto-refresh paused';
             } else {
                 autoRefreshEnabled = true;
+                failedRequestCount = 0; // Reset failed request count when resuming
                 startAutoRefresh();
                 btn.innerHTML = '<i class="fas fa-pause me-2"></i>Pause Auto-refresh';
                 btn.classList.remove('btn-outline-success');
                 btn.classList.add('btn-outline-secondary');
-                status.textContent = 'Auto-refreshing every 3 seconds';
+                status.textContent = 'Auto-refreshing every 10 seconds';
             }
         }
 
@@ -274,7 +277,9 @@
                 refreshBtn.disabled = true;
                 refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
                 
-                const response = await fetch('/api/jobs/all');
+                const response = await fetch('/api/jobs/all', {
+                    timeout: 5000 // 5 second timeout
+                });
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -283,16 +288,35 @@
                 allJobs = jobs; // Store all jobs for filtering
                 displayJobs(jobs);
                 
+                // Reset failed request count on success
+                failedRequestCount = 0;
+                
             } catch (error) {
                 console.error('Error fetching jobs:', error);
-                container.innerHTML = `
-                    <div class="alert alert-danger" role="alert">
-                        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Error</h4>
-                        <p>Failed to fetch job data: ${error.message}</p>
-                        <hr>
-                        <p class="mb-0">Please check if the server is running and try again.</p>
-                    </div>
-                `;
+                failedRequestCount++;
+                
+                // Disable auto-refresh after too many failures
+                if (failedRequestCount >= MAX_FAILED_REQUESTS && autoRefreshEnabled) {
+                    console.warn('Too many failed requests, disabling auto-refresh');
+                    toggleAutoRefresh();
+                    container.innerHTML = `
+                        <div class="alert alert-warning" role="alert">
+                            <h4 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Auto-refresh Disabled</h4>
+                            <p>Auto-refresh has been disabled due to repeated connection failures.</p>
+                            <hr>
+                            <p class="mb-0">Click "Resume Auto-refresh" when the server is stable.</p>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-danger" role="alert">
+                            <h4 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>Error</h4>
+                            <p>Failed to fetch job data: ${error.message}</p>
+                            <hr>
+                            <p class="mb-0">Please check if the server is running and try again. (Attempt ${failedRequestCount}/${MAX_FAILED_REQUESTS})</p>
+                        </div>
+                    `;
+                }
             } finally {
                 refreshBtn.disabled = false;
                 refreshBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Refresh';
@@ -301,14 +325,25 @@
 
         async function loadStats() {
             try {
-                const response = await fetch('/api/jobs/stats');
+                const response = await fetch('/api/jobs/stats', {
+                    timeout: 5000 // 5 second timeout
+                });
                 if (response.ok) {
                     const stats = await response.json();
                     updateStats(stats);
                     document.getElementById('stats-container').style.display = 'block';
+                    // Reset failed request count on success
+                    failedRequestCount = 0;
                 }
             } catch (error) {
                 console.error('Error loading stats:', error);
+                failedRequestCount++;
+                
+                // Disable auto-refresh after too many failures
+                if (failedRequestCount >= MAX_FAILED_REQUESTS && autoRefreshEnabled) {
+                    console.warn('Too many failed requests, disabling auto-refresh');
+                    toggleAutoRefresh();
+                }
             }
         }
 

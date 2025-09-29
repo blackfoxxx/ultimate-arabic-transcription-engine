@@ -408,7 +408,9 @@
     <script>
         let autoRefreshInterval;
         let autoRefreshEnabled = true;
-        const REFRESH_INTERVAL = 3000; // 3 seconds
+        const REFRESH_INTERVAL = 10000; // 10 seconds (reduced from 3 seconds)
+        let failedRequestCount = 0;
+        const MAX_FAILED_REQUESTS = 3;
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {

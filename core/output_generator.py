@@ -208,6 +208,51 @@ class OutputGenerator:
                     if timestamp_stats.get('estimated_sentences', 0) > 0:
                         f.write(f"Estimated Sentence Timestamps: {timestamp_stats['estimated_sentences']}\n")
                         f.write("(*estimated timestamps are calculated based on text position)\n")
+                
+                # Add voice analysis results if available
+                voice_analysis = transcript_data.get('voice_analysis', {})
+                if voice_analysis:
+                    f.write("\n" + "=" * 40 + "\n")
+                    f.write("VOICE ANALYSIS RESULTS\n")
+                    f.write("=" * 40 + "\n")
+                    
+                    # Sentiment Analysis
+                    sentiment = voice_analysis.get('sentiment_analysis', {})
+                    if sentiment:
+                        f.write("SENTIMENT ANALYSIS:\n")
+                        f.write(f"  Overall Sentiment: {sentiment.get('overall_sentiment', 'Unknown')}\n")
+                        f.write(f"  Confidence: {sentiment.get('confidence', 0):.2f}\n")
+                        f.write(f"  Emotional State: {sentiment.get('emotional_state', 'Unknown')}\n")
+                        f.write(f"  Arousal Level: {sentiment.get('arousal_level', 'Unknown')}\n")
+                        f.write(f"  Valence: {sentiment.get('valence', 'Unknown')}\n\n")
+                    
+                    # Attention/Stress Detection
+                    attention = voice_analysis.get('attention_detection', {})
+                    if attention:
+                        f.write("ATTENTION & STRESS ANALYSIS:\n")
+                        f.write(f"  Attention Level: {attention.get('attention_level', 'Unknown')}\n")
+                        f.write(f"  Stress Indicators: {attention.get('stress_level', 'Unknown')}\n")
+                        f.write(f"  Cognitive Load: {attention.get('cognitive_load', 'Unknown')}\n")
+                        f.write(f"  Voice Stability: {attention.get('voice_stability', 'Unknown')}\n\n")
+                    
+                    # Narrative Consistency
+                    narrative = voice_analysis.get('narrative_consistency', {})
+                    if narrative:
+                        f.write("NARRATIVE CONSISTENCY:\n")
+                        f.write(f"  Consistency Score: {narrative.get('consistency_score', 0):.2f}\n")
+                        f.write(f"  Deception Indicators: {narrative.get('deception_probability', 0):.2f}\n")
+                        f.write(f"  Speech Patterns: {narrative.get('speech_pattern_analysis', 'Unknown')}\n")
+                        f.write(f"  Hesitation Markers: {narrative.get('hesitation_count', 0)}\n\n")
+                    
+                    # Acoustic Features Summary
+                    acoustic = voice_analysis.get('acoustic_features', {})
+                    if acoustic:
+                        f.write("ACOUSTIC FEATURES:\n")
+                        f.write(f"  Average Pitch: {acoustic.get('pitch_mean', 0):.1f} Hz\n")
+                        f.write(f"  Pitch Variation: {acoustic.get('pitch_std', 0):.1f} Hz\n")
+                        f.write(f"  Speaking Rate: {acoustic.get('speaking_rate', 0):.1f} words/min\n")
+                        f.write(f"  Voice Quality: {acoustic.get('voice_quality', 'Unknown')}\n")
+                        f.write(f"  Energy Level: {acoustic.get('energy_mean', 0):.2f}\n\n")
                         
         except Exception as e:
             logger.error(f"TXT generation failed: {str(e)}")

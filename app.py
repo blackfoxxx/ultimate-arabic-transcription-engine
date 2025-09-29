@@ -28,6 +28,7 @@ import sys
 from core.audio_processor import AudioProcessor
 from core.unified_transcription_service_v3 import UnifiedTranscriptionService
 from core.enhanced_transcription_service import EnhancedTranscriptionService
+from core.multi_model_transcription_service import MultiModelTranscriptionService
 from core.output_generator import OutputGenerator
 from utils.file_manager import FileManager
 from utils.settings_manager import SettingsManager
@@ -44,6 +45,7 @@ logger = setup_logger(__name__)
 audio_processor = AudioProcessor()
 transcription_service = UnifiedTranscriptionService()
 enhanced_transcription_service = EnhancedTranscriptionService()
+multi_model_service = MultiModelTranscriptionService()
 output_generator = OutputGenerator()
 file_manager = FileManager()
 settings_manager = SettingsManager(file_manager)
@@ -274,7 +276,7 @@ def upload_file():
         # Get processing options
         options = {
             'noise_reduction': request.form.get('noise_reduction', 'auto'),
-            'model_size': request.form.get('model_size', 'medium'),
+            'model_size': request.form.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
             'output_formats': request.form.getlist('output_formats') or ['txt', 'srt'],
             'language': request.form.get('language', 'ar'),
             'processing_mode': request.form.get('processing_mode', app.config.get('PROCESSING_MODE', 'local')),
@@ -284,7 +286,10 @@ def upload_file():
             'voice_enhancement': request.form.get('voice_enhancement') == 'on',
             'speaker_profiles': request.form.get('speaker_profiles') == 'on',
             # Aya Arabic Enhancement option
-            'enable_aya_enhancement': request.form.get('enable_aya_enhancement') == 'on'
+            'enable_aya_enhancement': request.form.get('enable_aya_enhancement') == 'on',
+            # Multi-model transcription options
+            'enable_multi_model': request.form.get('enable_multi_model') == 'on',
+            'selected_models': json.loads(request.form.get('selected_models', '[]')) if request.form.get('selected_models') else []
         }
         
         # Start processing in background using thread
@@ -390,7 +395,7 @@ def api_transcribe():
         # Get processing options
         options = {
             'noise_reduction': request.form.get('noise_reduction', 'auto'),
-            'model_size': request.form.get('model_size', 'medium'),
+            'model_size': request.form.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
             'output_formats': request.form.getlist('output_formats') or ['txt', 'srt'],
             'language': request.form.get('language', 'ar'),
             'processing_mode': request.form.get('processing_mode', app.config.get('PROCESSING_MODE', 'local')),
@@ -465,19 +470,37 @@ async def process_file_async(job_id: str, file_path: str, original_filename: str
         
         # Process with options
         processing_mode = options.get('processing_mode', 'local')
+        enable_multi_model = options.get('enable_multi_model', False)
+        selected_models = options.get('selected_models', [])
         
         # Step 2: Preparing transcription
-        update_progress("Preparing", 10, f"Setting up {processing_mode} transcription")
+        if enable_multi_model and selected_models:
+            update_progress("Preparing", 10, f"Setting up multi-model transcription with {len(selected_models)} models")
+        else:
+            update_progress("Preparing", 10, f"Setting up {processing_mode} transcription")
         
-        # Choose transcription service based on mode
-        if processing_mode == 'api' and app.config.get('OPENAI_API_KEY'):
+        # Choose transcription approach
+        if enable_multi_model and selected_models:
+            # Step 3: Multi-model transcription
+            update_progress("Transcribing", 20, f"Starting multi-model transcription with {len(selected_models)} models")
+            transcript_data = await multi_model_service.transcribe_with_multiple_models(
+                audio_path=file_path,
+                selected_models=selected_models,
+                processing_mode=processing_mode,
+                model_size=options.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
+                language=options.get('language', 'ar'),
+                job_id=job_id,
+                **{k: v for k, v in options.items() if k not in ['processing_mode', 'model_size', 'language', 'enable_multi_model', 'selected_models']}
+            )
+            update_progress("Transcribing", 70, f"Multi-model transcription completed with {len(selected_models)} models")
+        elif processing_mode == 'api' and app.config.get('OPENAI_API_KEY'):
             # Step 3: API transcription
             update_progress("Transcribing", 20, "Starting API transcription")
             # Use enhanced service for API processing
             transcript_data = await enhanced_transcription_service.transcribe(
                 audio_path=file_path,
                 processing_mode=processing_mode,
-                model_size=options.get('model_size', 'medium'),
+                model_size=options.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
                 language=options.get('language', 'ar'),
                 job_id=job_id,
                 **{k: v for k, v in options.items() if k not in ['processing_mode', 'model_size', 'language']}
@@ -490,7 +513,7 @@ async def process_file_async(job_id: str, file_path: str, original_filename: str
             transcript_data = await transcription_service.transcribe(
                 audio_path=file_path,
                 processing_mode=processing_mode,
-                model_size=options.get('model_size', 'medium'),
+                model_size=options.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
                 language=options.get('language', 'ar'),
                 enable_aya_enhancement=options.get('enable_aya_enhancement', False),
                 job_id=job_id,
@@ -681,7 +704,7 @@ def estimate_processing_time():
                     file_manager.estimate_processing_time(
                         file_duration=data.get('file_duration'),
                         file_size=data.get('file_size'),
-                        model_size=data.get('model_size', 'medium'),
+                        model_size=data.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
                         processing_mode=data.get('processing_mode', 'local'),
                         options=data.get('options', {})
                     )
@@ -901,7 +924,7 @@ def restart_job(job_id: str):
         if not options:
             options = {
                 'noise_reduction': 'auto',
-                'model_size': 'medium',
+                'model_size': app.config.get('WHISPER_MODEL_SIZE', 'medium'),
                 'processing_mode': 'local',
                 'output_formats': ['txt', 'srt']
             }
@@ -1114,7 +1137,7 @@ def process_uploaded_files():
         # Processing options
         options = {
             'processing_mode': data.get('processing_mode', 'local'),
-            'model_size': data.get('model_size', 'medium'),
+            'model_size': data.get('model_size', app.config.get('WHISPER_MODEL_SIZE', 'medium')),
             'language': data.get('language', 'ar'),
             'noise_reduction': data.get('noise_reduction', 'auto'),
             'output_formats': data.get('output_formats', ['txt', 'srt'])

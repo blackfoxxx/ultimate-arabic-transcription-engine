@@ -22,6 +22,8 @@ import time
 import json
 import asyncio
 import glob
+import shutil
+import torch
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -537,40 +539,207 @@ Report issues: https://github.com/your-repo/ultimate-arabic-transcription-engine
         print(f"\n📋 Context: {context}")
         print("🆘 Need more help? Check the documentation or report an issue.")
 
-    # Legacy methods for compatibility (simplified versions)
+    # Actual transcription methods
     def initialize_engines(self, model_size: str = "large-v2"):
         """Initialize available transcription engines"""
         print(f"🔧 Initializing engines with model: {model_size}")
-        # Simplified initialization for compatibility
-        pass
+        
+        # Initialize engines based on availability
+        self.engines = {}
+        
+        if ULTIMATE_AVAILABLE:
+            try:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self.engines['ultimate'] = UltimateArabicTranscriptionEngine(
+                    model_size=model_size, 
+                    device=device,
+                    enable_preprocessing=True
+                )
+                self.engines['ultimate'].initialize_model()
+                print("✅ Ultimate Arabic Engine v3.0 initialized")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize Ultimate engine: {e}")
+        
+        if ADVANCED_AVAILABLE:
+            try:
+                self.engines['advanced'] = AdvancedArabicTranscriptionEngine()
+                print("✅ Advanced Arabic Engine v2.0 initialized")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize Advanced engine: {e}")
+        
+        if ENHANCED_AVAILABLE:
+            try:
+                self.engines['enhanced'] = EnhancedArabicTranscriptionEngine()
+                print("✅ Enhanced Arabic Engine initialized")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize Enhanced engine: {e}")
 
     async def process_single_file(self, file_path: str, engine_name: str = "ultimate") -> ProcessingResult:
-        """Process single audio file - simplified for compatibility"""
+        """Process single audio file with actual transcription"""
         if not self.validate_audio_file(file_path):
             raise ValueError(f"Invalid audio file: {file_path}")
         
-        # Return a basic result for compatibility
-        return ProcessingResult(
-            engine=engine_name,
-            model_size="large-v2",
-            processing_time=0.0,
-            text="Transcription would be processed here",
-            quality_metrics={},
-            segments=[],
-            metadata={}
-        )
+        start_time = time.time()
+        
+        # Check if engines are initialized
+        if not hasattr(self, 'engines') or not self.engines:
+            raise ValueError("Engines not initialized. Call initialize_engines() first.")
+        
+        # Select engine
+        if engine_name not in self.engines:
+            available_engines = list(self.engines.keys())
+            if available_engines:
+                engine_name = available_engines[0]
+                print(f"⚠️ Requested engine not available, using: {engine_name}")
+            else:
+                raise ValueError("No transcription engines available")
+        
+        engine = self.engines[engine_name]
+        
+        try:
+            print(f"🎵 Transcribing with {engine_name} engine...")
+            
+            # Perform transcription based on engine type
+            if engine_name == 'ultimate':
+                result = engine.transcribe(file_path)
+                
+                if result.get('success', False):
+                    # Extract text from the transcript structure
+                    transcript = result.get('transcript', {})
+                    text = transcript.get('full_text', result.get('text', ''))
+                    
+                    return ProcessingResult(
+                        engine=engine_name,
+                        model_size=engine.model_size,
+                        processing_time=result.get('processing_time', 0.0),
+                        text=text,
+                        quality_metrics=result.get('quality_metrics', {}),
+                        segments=transcript.get('segments', result.get('segments', [])),
+                        metadata=result.get('metadata', {})
+                    )
+                else:
+                    raise Exception(result.get('error', 'Transcription failed'))
+            
+            elif engine_name == 'advanced':
+                result = await engine.transcribe_arabic_advanced(file_path)
+                
+                return ProcessingResult(
+                    engine=engine_name,
+                    model_size=result.get('model_size', 'large-v2'),
+                    processing_time=result.get('processing_time', 0.0),
+                    text=result.get('text', ''),
+                    quality_metrics={
+                        'quality_score': result.get('quality_score', 0.0),
+                        'arabic_char_ratio': result.get('arabic_char_ratio', 0.0)
+                    },
+                    segments=result.get('segments', []),
+                    metadata=result
+                )
+            
+            elif engine_name == 'enhanced':
+                result = await engine.transcribe_arabic(file_path)
+                
+                return ProcessingResult(
+                    engine=engine_name,
+                    model_size=result.get('model_size', 'large-v2'),
+                    processing_time=result.get('processing_time', 0.0),
+                    text=result.get('text', ''),
+                    quality_metrics=result.get('arabic_quality_metrics', {}),
+                    segments=result.get('segments', []),
+                    metadata=result.get('metadata', {})
+                )
+            
+            else:
+                raise ValueError(f"Unknown engine: {engine_name}")
+                
+        except Exception as e:
+            processing_time = time.time() - start_time
+            print(f"❌ Transcription failed: {e}")
+            raise Exception(f"Transcription failed with {engine_name} engine: {e}")
 
     async def compare_engines(self, file_path: str) -> List[ProcessingResult]:
-        """Compare engines - simplified for compatibility"""
-        return [await self.process_single_file(file_path, "ultimate")]
+        """Compare all available engines"""
+        results = []
+        
+        if not hasattr(self, 'engines') or not self.engines:
+            raise ValueError("Engines not initialized. Call initialize_engines() first.")
+        
+        for engine_name in self.engines.keys():
+            try:
+                print(f"🔄 Testing {engine_name} engine...")
+                result = await self.process_single_file(file_path, engine_name)
+                results.append(result)
+            except Exception as e:
+                print(f"❌ {engine_name} engine failed: {e}")
+                continue
+        
+        return results
 
     def save_results(self, results: List[ProcessingResult], output_path: str, format_type: str = "txt"):
-        """Save results - simplified for compatibility"""
-        print(f"💾 Saving results to: {output_path}")
+        """Save transcription results to file"""
+        try:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            if format_type.lower() == "txt":
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    for result in results:
+                        f.write(f"Arabic Speech-to-Text Transcript\n")
+                        f.write(f"========================================\n")
+                        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"Duration: {result.processing_time:.2f} seconds\n")
+                        f.write(f"Language: ar\n")
+                        f.write(f"Model: {result.model_size}\n")
+                        f.write(f"Engine: {result.engine}\n")
+                        f.write(f"Processing: Single speaker\n\n")
+                        f.write(result.text)
+                        f.write("\n\n")
+            
+            elif format_type.lower() == "json":
+                output_data = []
+                for result in results:
+                    output_data.append({
+                        "engine": result.engine,
+                        "model_size": result.model_size,
+                        "processing_time": result.processing_time,
+                        "text": result.text,
+                        "quality_metrics": result.quality_metrics,
+                        "segments": result.segments,
+                        "metadata": result.metadata,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(output_data, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 Results saved to: {output_path}")
+            
+        except Exception as e:
+            print(f"❌ Failed to save results: {e}")
 
     def print_quality_comparison(self, results: List[ProcessingResult]):
-        """Print quality comparison - simplified for compatibility"""
-        print("📊 Quality comparison would be shown here")
+        """Print quality comparison between engines"""
+        if not results:
+            print("❌ No results to compare")
+            return
+        
+        print("\n📊 ENGINE COMPARISON RESULTS")
+        print("=" * 60)
+        
+        for result in results:
+            print(f"\n🚀 {result.engine.upper()} ENGINE:")
+            print(f"   Processing Time: {result.processing_time:.2f}s")
+            print(f"   Text Length: {len(result.text)} characters")
+            
+            if result.quality_metrics:
+                for metric, value in result.quality_metrics.items():
+                    if isinstance(value, float):
+                        print(f"   {metric}: {value:.3f}")
+                    else:
+                        print(f"   {metric}: {value}")
+            
+            print(f"   Preview: {result.text[:100]}...")
+        
+        print("=" * 60)
 
     async def process_with_enhanced_features(self, file_path: str, options: Dict[str, Any]) -> ProcessingResult:
         """Process with enhanced features - simplified for compatibility"""

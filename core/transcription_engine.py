@@ -39,8 +39,12 @@ class TranscriptionEngine:
         
         return device
     
-    async def load_model(self, model_size: str = 'medium') -> None:
+    async def load_model(self, model_size: str = None) -> None:
         """Load or switch Whisper model."""
+        # Use config default if no model_size provided
+        if model_size is None:
+            model_size = self.config.WHISPER_MODEL_SIZE
+            
         try:
             if self.model is None or self.current_model_size != model_size:
                 logger.info(f"Loading Whisper model: {model_size}")
@@ -70,7 +74,7 @@ class TranscriptionEngine:
     async def transcribe(
         self,
         audio_path: str,
-        model_size: str = 'medium',
+        model_size: str = None,
         language: str = 'ar',
         **kwargs
     ) -> Dict[str, Any]:

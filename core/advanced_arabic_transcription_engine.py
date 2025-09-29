@@ -16,12 +16,15 @@ from typing import Dict, List, Any, Optional, Tuple
 import time
 import gc
 
+from config import Config
+
 logger = logging.getLogger(__name__)
 
 class AdvancedArabicTranscriptionEngine:
     """Advanced Arabic transcription engine with superior accuracy optimizations."""
     
     def __init__(self):
+        self.config = Config()
         self.model = None
         self.current_model_size = None
         self.device = self._determine_device()
@@ -311,8 +314,12 @@ class AdvancedArabicTranscriptionEngine:
         except Exception:
             return 0.5
     
-    async def load_model(self, model_size: str = 'large-v2') -> None:
+    async def load_model(self, model_size: str = None) -> None:
         """Load Whisper model with Arabic optimizations."""
+        # Use config default if no model_size provided
+        if model_size is None:
+            model_size = self.config.ADVANCED_ARABIC_MODEL_SIZE
+            
         try:
             if self.model is None or self.current_model_size != model_size:
                 logger.info(f"🔄 Loading advanced Arabic-optimized Whisper: {model_size}")
@@ -351,7 +358,7 @@ class AdvancedArabicTranscriptionEngine:
     async def transcribe_arabic_advanced(
         self, 
         audio_path: str,
-        model_size: str = 'large-v2',
+        model_size: str = None,
         enable_preprocessing: bool = True
     ) -> Dict[str, Any]:
         """Advanced Arabic transcription with superior accuracy."""

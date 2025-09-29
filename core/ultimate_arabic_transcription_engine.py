@@ -85,9 +85,9 @@ class UltimateArabicTranscriptionEngine:
             # Temperature progression for quality
             "temperature": [0.0, 0.1, 0.2, 0.3],  # Conservative progression
             
-            # Arabic-specific thresholds
-            "no_speech_threshold": 0.5,  # Lower threshold for Arabic detection
-            "log_prob_threshold": -0.8,  # Higher threshold for Arabic confidence
+            # Arabic-specific thresholds - made more permissive
+            "no_speech_threshold": 0.3,  # More permissive threshold for Arabic detection
+            "log_prob_threshold": -1.2,  # More permissive threshold for Arabic confidence
             
             # Advanced options
             "condition_on_previous_text": True,
@@ -459,15 +459,21 @@ class UltimateArabicTranscriptionEngine:
         
         return ''.join(valid_sentences).strip()
     
-    def transcribe(self, audio_path: str) -> Dict[str, Any]:
+    def transcribe(self, audio_path: str, model_size: str = None) -> Dict[str, Any]:
         """
         Ultimate Arabic transcription with maximum quality and stability
         """
+        # If model_size is provided and different from current, reinitialize
+        if model_size and model_size != self.model_size:
+            self.model_size = model_size
+            self.model = None  # Force reinitialization
+            
         if not self.model:
-            return {
-                "error": "Model not initialized. Call initialize_model() first.",
-                "success": False
-            }
+            if not self.initialize_model():
+                return {
+                    "error": "Model initialization failed.",
+                    "success": False
+                }
         
         start_time = time.time()
         
@@ -533,9 +539,41 @@ class UltimateArabicTranscriptionEngine:
                 
                 return final_result
                 
+            elif result:
+                # Handle case where transcription succeeded but returned empty text
+                processing_time = time.time() - start_time
+                logger.warning("⚠️ Transcription completed but returned empty text")
+                
+                return {
+                    "transcript": {
+                        "full_text": "",
+                        "segments": result.get("segments", [])
+                    },
+                    "language": "ar",
+                    "success": True,
+                    "engine": "ultimate_arabic_v3",
+                    "processing_time": processing_time,
+                    "quality_metrics": {
+                        "arabic_char_ratio": 0.0,
+                        "quality_score": 0.0,
+                        "confidence_avg": 0.0,
+                        "coherence_score": 0.0,
+                        "word_completeness": 0.0,
+                        "language_purity": 0.0,
+                        "phonetic_accuracy": 0.0
+                    },
+                    "metadata": {
+                        "model_size": self.model_size,
+                        "device": self.device,
+                        "prompt_type": list(self.arabic_prompts.keys())[list(self.arabic_prompts.values()).index(selected_prompt)],
+                        "preprocessing_applied": True,
+                        "progressive_passes": result.get("passes_used", 1)
+                    }
+                }
+                
             else:
                 return {
-                    "error": result.get("error", "Unknown transcription error"),
+                    "error": "No transcription result returned",
                     "success": False,
                     "processing_time": time.time() - start_time
                 }

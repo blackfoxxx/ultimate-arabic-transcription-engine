@@ -47,7 +47,20 @@ try:
 except ImportError:
     AYA_AVAILABLE = False
 
+# Import voice analysis engine
+voice_analysis_error = None
+try:
+    from voice_analysis_engine import VoiceAnalysisEngine
+    VOICE_ANALYSIS_AVAILABLE = True
+except ImportError as e:
+    VOICE_ANALYSIS_AVAILABLE = False
+    voice_analysis_error = str(e)
+
 logger = logging.getLogger(__name__)
+
+# Log voice analysis availability after logger is defined
+if not VOICE_ANALYSIS_AVAILABLE:
+    logger.warning(f"Voice analysis engine not available: {voice_analysis_error}")
 
 class UnifiedTranscriptionService:
     """Unified service that can use either local models or cloud APIs with optional Aya enhancement."""
@@ -60,6 +73,7 @@ class UnifiedTranscriptionService:
         self.advanced_arabic_engine = None
         self.ultimate_arabic_engine = None
         self.aya_enhancer = None
+        self.voice_analysis_engine = None
         self.time_estimator = TimeEstimationEngine()
         
         # Memory management
@@ -96,12 +110,10 @@ class UnifiedTranscriptionService:
                 try:
                     # Use auto device detection instead of hardcoded CPU
                     device = "cuda" if torch.cuda.is_available() else "cpu"
+                    # Don't initialize with hardcoded model size - will be set dynamically
                     self.ultimate_arabic_engine = UltimateArabicTranscriptionEngine(device=device)
-                    if self.ultimate_arabic_engine.initialize_model():
-                        logger.info(f"🔥 Ultimate Arabic transcription engine v3.0 initialized on {device.upper()}")
-                    else:
-                        self.ultimate_arabic_engine = None
-                        logger.error("Failed to initialize Ultimate Arabic engine v3.0 model")
+                    # Don't initialize model here - will be done with user-selected model_size
+                    logger.info(f"🔥 Ultimate Arabic transcription engine v3.0 ready on {device.upper()}")
                 except Exception as e:
                     logger.error(f"Failed to initialize Ultimate Arabic engine v3.0: {e}")
                     self.ultimate_arabic_engine = None
@@ -114,6 +126,15 @@ class UnifiedTranscriptionService:
                 except Exception as e:
                     logger.error(f"Failed to initialize Aya enhancer: {e}")
                     self.aya_enhancer = None
+            
+            # Voice analysis engine (if available)
+            if VOICE_ANALYSIS_AVAILABLE:
+                try:
+                    self.voice_analysis_engine = VoiceAnalysisEngine()
+                    logger.info("🎤 Voice analysis engine initialized")
+                except Exception as e:
+                    logger.error(f"Failed to initialize Voice analysis engine: {e}")
+                    self.voice_analysis_engine = None
                     
         except Exception as e:
             logger.error(f"Error during engine initialization: {e}")
@@ -222,8 +243,39 @@ class UnifiedTranscriptionService:
             
             if use_ultimate_arabic:
                 logger.info("🔥 Using Ultimate Arabic transcription engine v3.0 (Maximum Quality)")
-                # Ultimate Arabic transcription - highest quality
-                transcription_result = self.ultimate_arabic_engine.transcribe(audio_path)
+                # Ultimate Arabic transcription - highest quality with user-selected model_size
+                transcription_result = self.ultimate_arabic_engine.transcribe(audio_path, model_size=model_size)
+                
+                # Transform Ultimate Arabic result structure to match expected format
+                if transcription_result and transcription_result.get('success'):
+                    # Extract text from transcript structure
+                    transcript_data = transcription_result.get('transcript', {})
+                    text = transcript_data.get('full_text', '')
+                    segments = transcript_data.get('segments', [])
+                    
+                    # Calculate duration from segments if available
+                    duration = 0.0
+                    if segments:
+                        # Get the end time of the last segment
+                        last_segment = segments[-1]
+                        if isinstance(last_segment, dict) and 'end' in last_segment:
+                            duration = last_segment['end']
+                        elif hasattr(last_segment, 'end'):
+                            duration = last_segment.end
+                    
+                    # Restructure to match output generator expectations
+                    transcription_result = {
+                        'text': text,
+                        'segments': segments,
+                        'duration': duration,
+                        'language': transcription_result.get('language', 'ar'),
+                        'model_size': transcription_result.get('metadata', {}).get('model_size', model_size),
+                        'processing_time': transcription_result.get('processing_time', 0.0),
+                        'quality_metrics': transcription_result.get('quality_metrics', {}),
+                        'metadata': transcription_result.get('metadata', {}),
+                        'engine': transcription_result.get('engine', 'ultimate_arabic_v3'),
+                        'success': True
+                    }
                 
             elif use_advanced_arabic:
                 logger.info("🚀 Using Advanced Arabic transcription engine v2.0")
@@ -277,6 +329,22 @@ class UnifiedTranscriptionService:
                     logger.error(f"Aya enhancement failed: {e}")
                     transcription_result['aya_enhanced'] = False
             
+            # Apply voice analysis if requested and available
+            enable_voice_analysis = kwargs.get('enable_voice_analysis', True)
+            if enable_voice_analysis and self.voice_analysis_engine:
+                try:
+                    logger.info("🎤 Performing voice analysis...")
+                    voice_analysis_result = await self.voice_analysis_engine.analyze_audio(
+                        audio_path=audio_path,
+                        language=language
+                    )
+                    transcription_result['voice_analysis'] = voice_analysis_result
+                    transcription_result['voice_analysis_enabled'] = True
+                except Exception as e:
+                    logger.error(f"Voice analysis failed: {e}")
+                    transcription_result['voice_analysis_enabled'] = False
+                    transcription_result['voice_analysis_error'] = str(e)
+            
             # Add processing metadata
             processing_time = time.time() - start_time
             transcription_result['processing_metadata'] = {
@@ -285,8 +353,29 @@ class UnifiedTranscriptionService:
                 'model_size': model_size,
                 'language': language,
                 'engine_used': self._get_engine_name(use_ultimate_arabic, use_advanced_arabic, use_enhanced_arabic),
-                'aya_enhanced': transcription_result.get('aya_enhanced', False)
+                'aya_enhanced': transcription_result.get('aya_enhanced', False),
+                'voice_analysis_enabled': transcription_result.get('voice_analysis_enabled', False)
             }
+            
+            # Add processing_info for compatibility with job processing system
+            transcription_result['processing_info'] = {
+                'processing_mode': processing_mode,
+                'model_used': self._get_engine_name(use_ultimate_arabic, use_advanced_arabic, use_enhanced_arabic),
+                'processing_time': processing_time,
+                'language': language,
+                'model_size': model_size,
+                'engine_used': self._get_engine_name(use_ultimate_arabic, use_advanced_arabic, use_enhanced_arabic)
+            }
+            
+            # Ensure model_size is available at root level for output generation
+            if 'model_size' not in transcription_result:
+                # Try to get model_size from various locations in the result
+                model_size_value = (
+                    transcription_result.get('metadata', {}).get('model_size') or  # Ultimate engine
+                    transcription_result.get('processing_metadata', {}).get('model_size') or  # Current location
+                    model_size  # Fallback to the parameter passed
+                )
+                transcription_result['model_size'] = model_size_value
             
             return transcription_result
             
@@ -319,7 +408,8 @@ class UnifiedTranscriptionService:
             'enhanced_arabic': self.enhanced_arabic_engine is not None,
             'advanced_arabic': self.advanced_arabic_engine is not None,
             'ultimate_arabic': self.ultimate_arabic_engine is not None,
-            'aya_enhancer': self.aya_enhancer is not None
+            'aya_enhancer': self.aya_enhancer is not None,
+            'voice_analysis': self.voice_analysis_engine is not None
         }
 
     def refresh_api_engine(self):

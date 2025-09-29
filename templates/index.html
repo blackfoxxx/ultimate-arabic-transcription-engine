@@ -350,6 +350,132 @@
                                 </div>
                             </div>
 
+                            <!-- Multi-Model Transcription Section -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary bg-opacity-10 border-primary">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 class="mb-0 text-primary">
+                                                        <i class="fas fa-layer-group me-2"></i>Multi-Model Transcription Comparison
+                                                    </h6>
+                                                    <small class="text-muted">Compare results from multiple AI models for better accuracy</small>
+                                                </div>
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="enableMultiModel" name="enable_multi_model">
+                                                    <label class="form-check-label fw-bold text-primary" for="enableMultiModel">
+                                                        <i class="fas fa-toggle-off me-1" id="multiModelToggleIcon"></i>Enable Multi-Model
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="mt-2">
+                                                <div class="alert alert-info mb-0 py-2" id="multiModelHint">
+                                                    <i class="fas fa-lightbulb me-2"></i>
+                                                    <strong>Tip:</strong> Enable this feature to compare transcription results from multiple AI models and get the most accurate transcription.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-body" id="multiModelOptions" style="display: none;">
+                                            <div class="row">
+                                                <div class="col-12">
+                                                    <p class="text-muted mb-3">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        Compare transcription results from multiple models to get the best accuracy and identify differences.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-primary mb-2">Available Models</h6>
+                                                    <div id="modelSelectionList">
+                                                        <!-- Model checkboxes will be populated here -->
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input model-checkbox" type="checkbox" value="standard_whisper" id="model_standard_whisper" checked>
+                                                            <label class="form-check-label" for="model_standard_whisper">
+                                                                <strong>Standard Whisper</strong>
+                                                                <small class="d-block text-muted">Basic Whisper model with standard settings</small>
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input model-checkbox" type="checkbox" value="enhanced_arabic" id="model_enhanced_arabic">
+                                                            <label class="form-check-label" for="model_enhanced_arabic">
+                                                                <strong>Enhanced Arabic v1.0</strong>
+                                                                <small class="d-block text-muted">Arabic-optimized Whisper with enhanced preprocessing</small>
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input model-checkbox" type="checkbox" value="advanced_arabic" id="model_advanced_arabic">
+                                                            <label class="form-check-label" for="model_advanced_arabic">
+                                                                <strong>Advanced Arabic v2.0</strong>
+                                                                <small class="d-block text-muted">High-performance Arabic transcription with advanced optimizations</small>
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input model-checkbox" type="checkbox" value="ultimate_arabic" id="model_ultimate_arabic">
+                                                            <label class="form-check-label" for="model_ultimate_arabic">
+                                                                <strong>Ultimate Arabic v3.0</strong>
+                                                                <small class="d-block text-muted">Latest generation Arabic transcription with superior quality</small>
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input model-checkbox" type="checkbox" value="openai_api" id="model_openai_api">
+                                                            <label class="form-check-label" for="model_openai_api">
+                                                                <strong>OpenAI Whisper API</strong>
+                                                                <small class="d-block text-muted">Cloud-based OpenAI Whisper API</small>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="col-md-6">
+                                                    <h6 class="text-primary mb-2">Comparison Features</h6>
+                                                    <div class="list-group list-group-flush">
+                                                        <div class="list-group-item border-0 px-0">
+                                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                                            Side-by-side text comparison
+                                                        </div>
+                                                        <div class="list-group-item border-0 px-0">
+                                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                                            Confidence score analysis
+                                                        </div>
+                                                        <div class="list-group-item border-0 px-0">
+                                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                                            Text similarity metrics
+                                                        </div>
+                                                        <div class="list-group-item border-0 px-0">
+                                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                                            Highlighted differences
+                                                        </div>
+                                                        <div class="list-group-item border-0 px-0">
+                                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                                            Best model recommendation
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="mt-3">
+                                                        <button type="button" class="btn btn-outline-primary btn-sm" id="selectRecommendedModels">
+                                                            <i class="fas fa-magic me-1"></i>Auto-Select Recommended
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="row mt-3">
+                                                <div class="col-12">
+                                                    <div class="alert alert-warning">
+                                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                                        <strong>Note:</strong> Multi-model transcription will take longer as each selected model processes the audio separately. 
+                                                        Select 2-4 models for optimal comparison without excessive processing time.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Multi-Speaker Processing -->
                             <div class="row mt-3">
                                 <div class="col-12">
@@ -647,13 +773,76 @@
                             </div>
 
                             <!-- Results -->
-                            <div id="resultsSection" class="mt-4 d-none">
-                                <div class="alert alert-success">
-                                    <h5><i class="fas fa-check-circle me-2"></i>Transcription Complete!</h5>
-                                    <div id="transcriptPreview" class="mt-3 p-3 bg-light rounded rtl-text"></div>
-                                    <div class="mt-3" id="downloadButtons"></div>
+            <div id="resultsSection" class="mt-4 d-none">
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-check-circle me-2"></i>Transcription Complete!</h5>
+                    <div id="transcriptPreview" class="mt-3 p-3 bg-light rounded rtl-text"></div>
+                    
+                    <!-- Voice Analysis Results -->
+                    <div id="voiceAnalysisSection" class="mt-4 d-none">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-microphone-alt me-2"></i>Voice Analysis Results</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <!-- Sentiment Analysis -->
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card h-100 border-primary">
+                                            <div class="card-header bg-primary text-white">
+                                                <h6 class="mb-0"><i class="fas fa-smile me-2"></i>Sentiment Analysis</h6>
+                                            </div>
+                                            <div class="card-body" id="sentimentBody">
+                                                <!-- Sentiment data will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Attention & Stress -->
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card h-100 border-warning">
+                                            <div class="card-header bg-warning text-dark">
+                                                <h6 class="mb-0"><i class="fas fa-brain me-2"></i>Attention & Stress</h6>
+                                            </div>
+                                            <div class="card-body" id="attentionBody">
+                                                <!-- Attention data will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Narrative Consistency -->
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card h-100 border-info">
+                                            <div class="card-header bg-info text-white">
+                                                <h6 class="mb-0"><i class="fas fa-search me-2"></i>Narrative Analysis</h6>
+                                            </div>
+                                            <div class="card-body" id="narrativeBody">
+                                                <!-- Narrative data will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Acoustic Features -->
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <div class="card border-success">
+                                            <div class="card-header bg-success text-white">
+                                                <h6 class="mb-0"><i class="fas fa-wave-square me-2"></i>Acoustic Features</h6>
+                                            </div>
+                                            <div class="card-body" id="acousticBody">
+                                                <!-- Acoustic features will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3" id="downloadButtons"></div>
+                </div>
+            </div>
 
                             <!-- Submit Button -->
                             <div class="text-center mt-4">
@@ -928,6 +1117,22 @@
             
             const formData = new FormData(uploadForm);
             
+            // Add multi-model support
+            const enableMultiModel = document.getElementById('enableMultiModel');
+            if (enableMultiModel && enableMultiModel.checked) {
+                const selectedModels = getSelectedModels();
+                if (selectedModels.length === 0) {
+                    showToast('Please select at least one model for multi-model transcription', 'error');
+                    return;
+                }
+                
+                formData.append('enable_multi_model', 'true');
+                formData.append('selected_models', JSON.stringify(selectedModels));
+                
+                // Update progress message for multi-model
+                updateProgress('Preparing multi-model transcription...', 5);
+            }
+            
             // Show progress section
             progressSection.classList.remove('d-none');
             resultsSection.classList.add('d-none');
@@ -1055,8 +1260,15 @@
             progressSection.classList.add('d-none');
             resultsSection.classList.remove('d-none');
             
-            // Show transcript preview
+            // Check if this is a multi-model result
             const transcriptData = status.results?.transcript_data;
+            if (transcriptData?.model_results && Object.keys(transcriptData.model_results).length > 1) {
+                // Display multi-model comparison results
+                displayMultiModelResults(transcriptData);
+                return;
+            }
+            
+            // Show transcript preview
             const transcriptPreview = document.getElementById('transcriptPreview');
             
             if (transcriptData?.multi_speaker) {
@@ -1126,6 +1338,18 @@
                         </div>
                     </div>
                 `;
+            }
+            
+            // Display voice analysis results if available
+            const voiceAnalysis = transcriptData?.voice_analysis;
+            if (voiceAnalysis) {
+                displayVoiceAnalysis(voiceAnalysis);
+            } else {
+                // Hide voice analysis section if no data available
+                const voiceAnalysisSection = document.getElementById('voiceAnalysisSection');
+                if (voiceAnalysisSection) {
+                    voiceAnalysisSection.style.display = 'none';
+                }
             }
             
             // Generate download buttons
@@ -1562,7 +1786,425 @@
                     option.disabled = !this.checked;
                 });
             });
+            
+            // Multi-Model Transcription Event Listeners
+            initializeMultiModelFeature();
         });
+        
+        // Multi-Model Transcription Functions
+        function initializeMultiModelFeature() {
+            const enableMultiModel = document.getElementById('enableMultiModel');
+            const multiModelOptions = document.getElementById('multiModelOptions');
+            const selectRecommendedModels = document.getElementById('selectRecommendedModels');
+            const multiModelToggleIcon = document.getElementById('multiModelToggleIcon');
+            const multiModelHint = document.getElementById('multiModelHint');
+            
+            // Toggle multi-model options visibility
+            enableMultiModel.addEventListener('change', function() {
+                if (this.checked) {
+                    multiModelOptions.style.display = 'block';
+                    multiModelToggleIcon.className = 'fas fa-toggle-on me-1 text-success';
+                    multiModelHint.style.display = 'none';
+                    // Ensure at least one model is selected
+                    const checkedModels = document.querySelectorAll('.model-checkbox:checked');
+                    if (checkedModels.length === 0) {
+                        document.getElementById('model_standard_whisper').checked = true;
+                    }
+                } else {
+                    multiModelOptions.style.display = 'none';
+                    multiModelToggleIcon.className = 'fas fa-toggle-off me-1';
+                    multiModelHint.style.display = 'block';
+                }
+            });
+            
+            // Auto-select recommended models
+            selectRecommendedModels.addEventListener('click', function() {
+                // Clear all selections first
+                document.querySelectorAll('.model-checkbox').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                
+                // Select recommended models based on file characteristics
+                const fileInput = document.getElementById('fileInput');
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const fileSizeMB = file.size / (1024 * 1024);
+                    
+                    // Get audio duration if available (simplified logic)
+                    // For now, use file size as a proxy
+                    if (fileSizeMB < 10) {
+                        // Small files - fast models
+                        document.getElementById('model_standard_whisper').checked = true;
+                        document.getElementById('model_enhanced_arabic').checked = true;
+                    } else if (fileSizeMB < 50) {
+                        // Medium files - balanced models
+                        document.getElementById('model_enhanced_arabic').checked = true;
+                        document.getElementById('model_advanced_arabic').checked = true;
+                    } else {
+                        // Large files - high-quality models
+                        document.getElementById('model_advanced_arabic').checked = true;
+                        document.getElementById('model_ultimate_arabic').checked = true;
+                    }
+                } else {
+                    // Default selection
+                    document.getElementById('model_standard_whisper').checked = true;
+                    document.getElementById('model_enhanced_arabic').checked = true;
+                }
+                
+                showToast('Recommended models selected based on file characteristics', 'success');
+            });
+            
+            // Validate model selection
+            document.querySelectorAll('.model-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const checkedModels = document.querySelectorAll('.model-checkbox:checked');
+                    const enableMultiModel = document.getElementById('enableMultiModel');
+                    
+                    if (enableMultiModel.checked && checkedModels.length === 0) {
+                        // Prevent deselecting all models when multi-model is enabled
+                        this.checked = true;
+                        showToast('At least one model must be selected for multi-model transcription', 'warning');
+                    } else if (checkedModels.length > 4) {
+                        // Limit to 4 models for performance
+                        this.checked = false;
+                        showToast('Maximum 4 models can be selected for optimal performance', 'warning');
+                    }
+                });
+            });
+        }
+        
+        // Get selected models for multi-model transcription
+        function getSelectedModels() {
+            const selectedModels = [];
+            const checkedBoxes = document.querySelectorAll('.model-checkbox:checked');
+            
+            checkedBoxes.forEach(checkbox => {
+                const modelId = checkbox.value;
+                const modelSize = document.getElementById('modelSize').value || 'medium';
+                
+                selectedModels.push({
+                    model_id: modelId,
+                    model_size: modelSize
+                });
+            });
+            
+            return selectedModels;
+        }
+        
+        // Display multi-model comparison results
+        function displayMultiModelResults(results) {
+            const resultsContainer = document.getElementById('transcriptResults');
+            if (!results.model_results || Object.keys(results.model_results).length <= 1) {
+                return; // Not a multi-model result
+            }
+            
+            let html = `
+                <div class="multi-model-results mt-4">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary bg-opacity-10">
+                            <h5 class="mb-0 text-primary">
+                                <i class="fas fa-layer-group me-2"></i>Multi-Model Comparison Results
+                            </h5>
+                            <small class="text-muted">
+                                Processed with ${results.total_models} models in ${results.total_processing_time?.toFixed(2)}s
+                            </small>
+                        </div>
+                        <div class="card-body">
+            `;
+            
+            // Best model recommendation
+            if (results.comparison?.best_model) {
+                html += `
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-trophy me-2"></i>
+                        <strong>Recommended Result:</strong> ${getModelDisplayName(results.comparison.best_model)}
+                        <small class="d-block mt-1">
+                            Based on confidence score and text quality analysis
+                        </small>
+                    </div>
+                `;
+            }
+            
+            // Comparison metrics
+            if (results.comparison) {
+                html += `
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-primary">${results.comparison.consensus_level || 'Unknown'}</div>
+                                <small class="text-muted">Consensus Level</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-info">${(results.comparison.average_confidence * 100).toFixed(1)}%</div>
+                                <small class="text-muted">Avg Confidence</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-success">${results.comparison.total_unique_words || 0}</div>
+                                <small class="text-muted">Unique Words</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-warning">${Object.keys(results.model_results).length}</div>
+                                <small class="text-muted">Models Used</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Individual model results
+            html += '<div class="model-results-tabs">';
+            html += '<ul class="nav nav-tabs" role="tablist">';
+            
+            let isFirst = true;
+            for (const [modelId, result] of Object.entries(results.model_results)) {
+                const displayName = getModelDisplayName(modelId);
+                const confidence = (result.confidence * 100).toFixed(1);
+                const processingTime = results.processing_times?.[modelId]?.toFixed(2) || 'N/A';
+                
+                html += `
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link ${isFirst ? 'active' : ''}" 
+                                id="tab-${modelId}" 
+                                data-bs-toggle="tab" 
+                                data-bs-target="#content-${modelId}" 
+                                type="button" 
+                                role="tab">
+                            ${displayName}
+                            <small class="d-block text-muted">${confidence}% • ${processingTime}s</small>
+                        </button>
+                    </li>
+                `;
+                isFirst = false;
+            }
+            
+            html += '</ul>';
+            html += '<div class="tab-content mt-3">';
+            
+            isFirst = true;
+            for (const [modelId, result] of Object.entries(results.model_results)) {
+                html += `
+                    <div class="tab-pane fade ${isFirst ? 'show active' : ''}" 
+                         id="content-${modelId}" 
+                         role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row mb-2">
+                                    <div class="col-md-6">
+                                        <strong>Model:</strong> ${result.model_size || 'default'}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Word Count:</strong> ${result.word_count || 0}
+                                    </div>
+                                </div>
+                                <div class="transcript-text bg-light p-3 rounded">
+                                    ${result.text || 'No transcription available'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                isFirst = false;
+            }
+            
+            html += '</div></div>'; // Close tab-content and model-results-tabs
+            html += '</div></div></div>'; // Close card-body, card, and multi-model-results
+            
+            resultsContainer.innerHTML = html;
+        }
+        
+        // Helper function to get display name for model
+        function getModelDisplayName(modelId) {
+            const modelNames = {
+                'standard_whisper': 'Standard Whisper',
+                'enhanced_arabic': 'Enhanced Arabic v1.0',
+                'advanced_arabic': 'Advanced Arabic v2.0',
+                'ultimate_arabic': 'Ultimate Arabic v3.0',
+                'openai_api': 'OpenAI Whisper API'
+            };
+            return modelNames[modelId] || modelId;
+        }
+        
+        // Toast notification function
+        function showToast(message, type = 'info') {
+            // Create toast element if it doesn't exist
+            let toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toastContainer';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toastId = 'toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast" role="alert">
+                    <div class="toast-header">
+                        <i class="fas fa-info-circle text-${type} me-2"></i>
+                        <strong class="me-auto">Notification</strong>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+            toast.show();
+            
+            // Remove toast element after it's hidden
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
+
+        // Voice Analysis Display Function
+        function displayVoiceAnalysis(voiceAnalysis) {
+            const voiceAnalysisSection = document.getElementById('voiceAnalysisSection');
+            if (!voiceAnalysisSection) return;
+            
+            voiceAnalysisSection.style.display = 'block';
+            
+            // Display Sentiment Analysis
+            const sentimentBody = document.getElementById('sentimentBody');
+            if (voiceAnalysis.sentiment && sentimentBody) {
+                const sentiment = voiceAnalysis.sentiment;
+                sentimentBody.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Overall Sentiment:</strong> 
+                            <span class="badge bg-${getSentimentColor(sentiment.overall_sentiment)}">${sentiment.overall_sentiment}</span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Confidence:</strong> ${(sentiment.confidence * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">Emotional Tone: ${sentiment.emotional_tone || 'Neutral'}</small>
+                    </div>
+                `;
+            }
+            
+            // Display Attention & Stress
+            const attentionBody = document.getElementById('attentionBody');
+            if (voiceAnalysis.attention && attentionBody) {
+                const attention = voiceAnalysis.attention;
+                attentionBody.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>Attention Level:</strong><br>
+                            <span class="badge bg-${getAttentionColor(attention.attention_level)}">${attention.attention_level}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Stress Level:</strong><br>
+                            <span class="badge bg-${getStressColor(attention.stress_level)}">${attention.stress_level}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Engagement:</strong><br>
+                            ${(attention.engagement_score * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Display Narrative Analysis
+            const narrativeBody = document.getElementById('narrativeBody');
+            if (voiceAnalysis.narrative && narrativeBody) {
+                const narrative = voiceAnalysis.narrative;
+                narrativeBody.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Consistency Score:</strong> ${(narrative.consistency_score * 100).toFixed(1)}%
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Truthfulness:</strong> 
+                            <span class="badge bg-${getTruthfulnessColor(narrative.truthfulness_indicator)}">${narrative.truthfulness_indicator}</span>
+                        </div>
+                    </div>
+                    ${narrative.inconsistencies && narrative.inconsistencies.length > 0 ? `
+                        <div class="mt-2">
+                            <small class="text-warning">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                ${narrative.inconsistencies.length} potential inconsistency(ies) detected
+                            </small>
+                        </div>
+                    ` : ''}
+                `;
+            }
+            
+            // Display Acoustic Features
+            const acousticBody = document.getElementById('acousticBody');
+            if (voiceAnalysis.acoustic_features && acousticBody) {
+                const acoustic = voiceAnalysis.acoustic_features;
+                acousticBody.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Avg Pitch:</strong><br>
+                            ${acoustic.pitch_mean ? acoustic.pitch_mean.toFixed(1) + ' Hz' : 'N/A'}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Speaking Rate:</strong><br>
+                            ${acoustic.speaking_rate ? acoustic.speaking_rate.toFixed(1) + ' wpm' : 'N/A'}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Energy:</strong><br>
+                            ${acoustic.energy_mean ? acoustic.energy_mean.toFixed(3) : 'N/A'}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Spectral Centroid:</strong><br>
+                            ${acoustic.spectral_centroid_mean ? acoustic.spectral_centroid_mean.toFixed(1) + ' Hz' : 'N/A'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Helper functions for color coding
+        function getSentimentColor(sentiment) {
+            switch(sentiment?.toLowerCase()) {
+                case 'positive': return 'success';
+                case 'negative': return 'danger';
+                case 'neutral': return 'secondary';
+                default: return 'secondary';
+            }
+        }
+        
+        function getAttentionColor(level) {
+            switch(level?.toLowerCase()) {
+                case 'high': return 'success';
+                case 'medium': return 'warning';
+                case 'low': return 'danger';
+                default: return 'secondary';
+            }
+        }
+        
+        function getStressColor(level) {
+            switch(level?.toLowerCase()) {
+                case 'low': return 'success';
+                case 'medium': return 'warning';
+                case 'high': return 'danger';
+                default: return 'secondary';
+            }
+        }
+        
+        function getTruthfulnessColor(indicator) {
+            switch(indicator?.toLowerCase()) {
+                case 'high': return 'success';
+                case 'medium': return 'warning';
+                case 'low': return 'danger';
+                default: return 'secondary';
+            }
+        }
     </script>
 </body>
 </html>

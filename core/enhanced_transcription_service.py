@@ -496,7 +496,26 @@ class EnhancedTranscriptionService:
     # Maintain compatibility with original transcription service
     async def transcribe(self, *args, **kwargs) -> Dict[str, Any]:
         """Fallback to basic transcription for compatibility."""
-        return await self.transcription_service.transcribe(*args, **kwargs)
+        result = await self.transcription_service.transcribe(*args, **kwargs)
+        
+        # Ensure processing_info is present for compatibility with job processing system
+        if 'processing_info' not in result:
+            # Extract processing parameters from kwargs or use defaults
+            processing_mode = kwargs.get('processing_mode', 'local')
+            model_size = kwargs.get('model_size', 'medium')
+            language = kwargs.get('language', 'ar')
+            processing_time = result.get('processing_time', 0)
+            
+            result['processing_info'] = {
+                'processing_mode': processing_mode,
+                'model_used': 'Enhanced Transcription Service',
+                'processing_time': processing_time,
+                'language': language,
+                'model_size': model_size,
+                'engine_used': 'Enhanced Transcription Service'
+            }
+        
+        return result
     
     def refresh_api_engine(self):
         """Refresh API engine configuration."""
