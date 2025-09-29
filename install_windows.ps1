@@ -1,23 +1,16 @@
-# Ultimate Arabic Transcription Engine - Windows 11 Silent Installation Script
-# This script installs all required dependencies and sets up the platform automatically
-# No user interaction required - fully automated installation
+# Ultimate Arabic Transcription Engine - Windows Installation Script
+# This script installs all dependencies and sets up the Arabic transcription engine with LLM support
 
 param(
+    [string]$InstallPath = "C:\UltimateArabicTranscription",
+    [switch]$SkipChocolatey,
     [switch]$SkipPython,
-    [switch]$SkipFFmpeg,
     [switch]$SkipGit,
-    [string]$InstallPath = "C:\ArabicSTT"
+    [switch]$WhatIf
 )
 
-# Set execution policy for this session
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-
-# Enable TLS 1.2 for secure downloads
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-
-Write-Host "🎙️ Ultimate Arabic Transcription Engine - Windows 11 Silent Installation" -ForegroundColor Cyan
-Write-Host "=========================================================================" -ForegroundColor Cyan
-Write-Host ""
+# Set error handling
+$ErrorActionPreference = "Stop"
 
 # Function to check if running as administrator
 function Test-Administrator {
@@ -26,503 +19,633 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Check for administrator privileges
-if (-not (Test-Administrator)) {
-    Write-Host "❌ This script requires administrator privileges" -ForegroundColor Red
-    Write-Host "💡 Please run PowerShell as Administrator and try again" -ForegroundColor Yellow
-    exit 1
-}
-
-# Function to download file with progress
-function Download-File {
-    param(
-        [string]$Url,
-        [string]$OutputPath
-    )
-    
-    try {
-        Write-Host "📥 Downloading: $([System.IO.Path]::GetFileName($OutputPath))" -ForegroundColor Yellow
-        $webClient = New-Object System.Net.WebClient
-        $webClient.DownloadFile($Url, $OutputPath)
-        Write-Host "✅ Downloaded successfully" -ForegroundColor Green
-        return $true
-    }
-    catch {
-        Write-Host "❌ Download failed: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
-    }
-}
-
 # Function to install Chocolatey
 function Install-Chocolatey {
-    if (Get-Command choco -ErrorAction SilentlyContinue) {
-        Write-Host "✅ Chocolatey is already installed" -ForegroundColor Green
-        return $true
-    }
-    
-    Write-Host "📦 Installing Chocolatey package manager..." -ForegroundColor Yellow
+    Write-Host "Installing Chocolatey package manager..." -ForegroundColor Yellow
     try {
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            Write-Host "[OK] Chocolatey is already installed" -ForegroundColor Green
+            return $true
+        }
+        
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        
+        # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        Write-Host "✅ Chocolatey installed successfully" -ForegroundColor Green
+        
+        Write-Host "[OK] Chocolatey installed successfully" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to install Chocolatey: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install Chocolatey: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to install Python
 function Install-Python {
-    if ($SkipPython) {
-        Write-Host "⏭️ Skipping Python installation (--SkipPython flag)" -ForegroundColor Yellow
-        return $true
-    }
-    
-    # Check if Python 3.8+ is already installed
+    Write-Host "Installing Python..." -ForegroundColor Yellow
     try {
-        $pythonVersion = python --version 2>&1
-        if ($pythonVersion -match "Python 3\.([8-9]|\d{2,})") {
-            Write-Host "✅ Python 3.8+ is already installed: $pythonVersion" -ForegroundColor Green
-            return $true
+        if (Get-Command python -ErrorAction SilentlyContinue) {
+            $pythonVersion = python --version 2>&1
+            if ($pythonVersion -match "Python 3\.[8-9]|Python 3\.1[0-9]") {
+                Write-Host "[OK] Python is already installed: $pythonVersion" -ForegroundColor Green
+                return $true
+            }
         }
-    }
-    catch {
-        # Python not found, continue with installation
-    }
-    
-    Write-Host "🐍 Installing Python 3.11..." -ForegroundColor Yellow
-    try {
-        choco install python311 -y --force
+        
+        choco install python -y
+        
         # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        Write-Host "✅ Python 3.11 installed successfully" -ForegroundColor Green
+        
+        Write-Host "[OK] Python installed successfully" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to install Python: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install Python: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to install FFmpeg
 function Install-FFmpeg {
-    if ($SkipFFmpeg) {
-        Write-Host "⏭️ Skipping FFmpeg installation (--SkipFFmpeg flag)" -ForegroundColor Yellow
-        return $true
-    }
-    
-    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-        Write-Host "✅ FFmpeg is already installed" -ForegroundColor Green
-        return $true
-    }
-    
-    Write-Host "🎬 Installing FFmpeg..." -ForegroundColor Yellow
+    Write-Host "Installing FFmpeg..." -ForegroundColor Yellow
     try {
-        choco install ffmpeg -y --force
+        if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+            Write-Host "[OK] FFmpeg is already installed" -ForegroundColor Green
+            return $true
+        }
+        
+        choco install ffmpeg -y
+        
         # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        Write-Host "✅ FFmpeg installed successfully" -ForegroundColor Green
+        
+        Write-Host "[OK] FFmpeg installed successfully" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to install FFmpeg: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install FFmpeg: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to install Git
 function Install-Git {
-    if ($SkipGit) {
-        Write-Host "⏭️ Skipping Git installation (--SkipGit flag)" -ForegroundColor Yellow
-        return $true
-    }
-    
-    if (Get-Command git -ErrorAction SilentlyContinue) {
-        Write-Host "✅ Git is already installed" -ForegroundColor Green
-        return $true
-    }
-    
-    Write-Host "📚 Installing Git..." -ForegroundColor Yellow
+    Write-Host "Installing Git..." -ForegroundColor Yellow
     try {
-        choco install git -y --force
+        if (Get-Command git -ErrorAction SilentlyContinue) {
+            Write-Host "[OK] Git is already installed" -ForegroundColor Green
+            return $true
+        }
+        
+        choco install git -y
+        
         # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        Write-Host "✅ Git installed successfully" -ForegroundColor Green
+        
+        Write-Host "[OK] Git installed successfully" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to install Git: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install Git: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to install Visual C++ Redistributables
 function Install-VCRedist {
-    Write-Host "🔧 Installing Visual C++ Redistributables..." -ForegroundColor Yellow
+    Write-Host "Installing Visual C++ Redistributables..." -ForegroundColor Yellow
     try {
-        choco install vcredist-all -y --force
-        Write-Host "✅ Visual C++ Redistributables installed" -ForegroundColor Green
+        choco install vcredist-all -y
+        Write-Host "[OK] Visual C++ Redistributables installed" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to install Visual C++ Redistributables: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install Visual C++ Redistributables: $($_.Exception.Message)" -ForegroundColor Red
         return $false
+    }
+}
+
+# Function to install Ollama for LLM support
+function Install-Ollama {
+    Write-Host "Installing Ollama for LLM support..." -ForegroundColor Yellow
+    try {
+        if (Get-Command ollama -ErrorAction SilentlyContinue) {
+            Write-Host "[OK] Ollama is already installed" -ForegroundColor Green
+            return $true
+        }
+        
+        # Install Ollama using winget
+        winget install Ollama.Ollama --accept-source-agreements --accept-package-agreements
+        
+        # Refresh environment variables
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        
+        Write-Host "[OK] Ollama installed successfully" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "[ERROR] Failed to install Ollama: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[INFO] You can manually install Ollama from https://ollama.ai" -ForegroundColor Yellow
+        return $false
+    }
+}
+
+# Function to start Ollama service
+function Start-OllamaService {
+    Write-Host "Starting Ollama service..." -ForegroundColor Yellow
+    try {
+        # Start Ollama service in background
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden -PassThru
+        Start-Sleep -Seconds 3
+        Write-Host "[OK] Ollama service started" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "[WARN] Could not start Ollama service automatically: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "[INFO] You may need to start Ollama manually after installation" -ForegroundColor Yellow
+        return $true
+    }
+}
+
+# Function to download LLM models
+function Download-LLMModels {
+    Write-Host "Downloading LLM models..." -ForegroundColor Yellow
+    try {
+        # Check if Ollama is available
+        if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
+            Write-Host "[WARN] Ollama not found, skipping model download" -ForegroundColor Yellow
+            return $true
+        }
+        
+        # Ensure Ollama service is running
+        Start-OllamaService
+        
+        # Download Aya model for Arabic enhancement
+        Write-Host "Downloading Aya model for Arabic enhancement..." -ForegroundColor Cyan
+        try {
+            ollama pull aya:8b
+            Write-Host "[OK] Aya model downloaded successfully" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "[WARN] Failed to download Aya model: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "[INFO] You can manually download it later with: ollama pull aya:8b" -ForegroundColor Yellow
+        }
+        
+        # Download Llama model for general tasks
+        Write-Host "Downloading Llama model for general tasks..." -ForegroundColor Cyan
+        try {
+            ollama pull llama3.2:3b
+            Write-Host "[OK] Llama model downloaded successfully" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "[WARN] Failed to download Llama model: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "[INFO] You can manually download it later with: ollama pull llama3.2:3b" -ForegroundColor Yellow
+        }
+        
+        return $true
+    }
+    catch {
+        Write-Host "[WARN] Model download encountered issues: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "[INFO] Models can be downloaded manually after installation" -ForegroundColor Yellow
+        return $true
     }
 }
 
 # Function to create installation directory
 function Create-InstallDirectory {
-    Write-Host "📁 Creating installation directory: $InstallPath" -ForegroundColor Yellow
+    Write-Host "Creating installation directory..." -ForegroundColor Yellow
     try {
         if (-not (Test-Path $InstallPath)) {
             New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
         }
         Set-Location $InstallPath
-        Write-Host "✅ Installation directory created" -ForegroundColor Green
+        Write-Host "[OK] Installation directory created: $InstallPath" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to create installation directory: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to create installation directory: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to clone or copy the repository
 function Setup-Repository {
-    Write-Host "📦 Setting up Arabic Transcription Engine..." -ForegroundColor Yellow
+    Write-Host "Setting up Arabic Transcription Engine..." -ForegroundColor Yellow
     
-    # If we're already in the project directory, just continue
-    if (Test-Path "requirements.txt") {
-        Write-Host "✅ Already in project directory" -ForegroundColor Green
-        return $true
-    }
-    
-    # Try to copy from current directory if it exists
-    $currentDir = Get-Location
-    $sourceDir = Split-Path -Parent $PSScriptRoot
-    
-    if (Test-Path "$sourceDir\requirements.txt") {
-        Write-Host "📋 Copying project files from current directory..." -ForegroundColor Yellow
-        try {
-            Copy-Item -Path "$sourceDir\*" -Destination $InstallPath -Recurse -Force
-            Write-Host "✅ Project files copied successfully" -ForegroundColor Green
-            return $true
-        }
-        catch {
-            Write-Host "❌ Failed to copy project files: $($_.Exception.Message)" -ForegroundColor Red
-            return $false
-        }
-    }
-    
-    Write-Host "❌ Could not find project files. Please ensure the script is run from the project directory." -ForegroundColor Red
-    return $false
-}
-
-# Function to create Python virtual environment
-function Create-VirtualEnvironment {
-    Write-Host "🌐 Creating Python virtual environment..." -ForegroundColor Yellow
     try {
-        python -m venv venv
+        if (Test-Path ".git") {
+            Write-Host "[OK] Repository already exists, pulling latest changes..." -ForegroundColor Green
+            git pull
+        } else {
+            Write-Host "Cloning repository..." -ForegroundColor Cyan
+            git clone https://github.com/your-repo/ultimate-arabic-transcription-engine.git .
+        }
         
-        # Activate virtual environment
-        & ".\venv\Scripts\Activate.ps1"
-        
-        # Upgrade pip
-        Write-Host "📦 Upgrading pip..." -ForegroundColor Yellow
-        python -m pip install --upgrade pip --quiet
-        
-        Write-Host "✅ Virtual environment created and activated" -ForegroundColor Green
+        Write-Host "[OK] Repository setup completed" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to create virtual environment: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to setup repository: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[INFO] Please ensure you have internet connection and Git is installed" -ForegroundColor Yellow
+        return $false
+    }
+}
+
+# Function to create virtual environment
+function Create-VirtualEnvironment {
+    Write-Host "Creating Python virtual environment..." -ForegroundColor Yellow
+    try {
+        if (Test-Path "venv") {
+            Write-Host "[OK] Virtual environment already exists" -ForegroundColor Green
+        } else {
+            python -m venv venv
+            Write-Host "[OK] Virtual environment created" -ForegroundColor Green
+        }
+        
+        # Activate virtual environment
+        & "venv\Scripts\Activate.ps1"
+        Write-Host "[OK] Virtual environment activated" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "[ERROR] Failed to create virtual environment: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to install Python dependencies
 function Install-PythonDependencies {
-    Write-Host "📚 Installing Python dependencies..." -ForegroundColor Yellow
+    Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
     try {
-        # Install PyTorch first (CPU version for compatibility)
-        Write-Host "🔥 Installing PyTorch..." -ForegroundColor Yellow
-        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu --quiet
+        # Upgrade pip first
+        python -m pip install --upgrade pip
         
-        # Install other requirements
-        Write-Host "📋 Installing other requirements..." -ForegroundColor Yellow
-        pip install -r requirements.txt --quiet
+        # Install requirements
+        if (Test-Path "requirements.txt") {
+            python -m pip install -r requirements.txt
+        } else {
+            Write-Host "[WARN] requirements.txt not found, installing basic dependencies..." -ForegroundColor Yellow
+            python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+            python -m pip install openai-whisper faster-whisper flask requests python-dotenv
+        }
         
-        Write-Host "✅ Python dependencies installed successfully" -ForegroundColor Green
+        Write-Host "[OK] Python dependencies installed" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to install Python dependencies: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "💡 Try running: pip install --upgrade pip" -ForegroundColor Yellow
+        Write-Host "[ERROR] Failed to install Python dependencies: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[INFO] Try running: pip install --upgrade pip" -ForegroundColor Yellow
         return $false
     }
 }
 
 # Function to create environment configuration
 function Create-EnvironmentConfig {
-    Write-Host "⚙️ Setting up environment configuration..." -ForegroundColor Yellow
-    
-    if (Test-Path ".env") {
-        Write-Host "ℹ️ Environment configuration already exists" -ForegroundColor Blue
-        return $true
-    }
+    Write-Host "Setting up environment configuration..." -ForegroundColor Yellow
     
     try {
-        $secretKey = -join ((1..64) | ForEach {Get-Random -input ([char[]]([char]'a'..[char]'z') + ([char[]]([char]'A'..[char]'Z')) + 0..9)})
-        
         $envContent = @"
-# Ultimate Arabic Transcription Engine Configuration
-# Processing Mode: 'local' for Whisper models, 'api' for OpenAI API
-PROCESSING_MODE=local
+# Processing Configuration
+PROCESSING_MODE=enhanced
+OPENAI_API_KEY=your_openai_api_key_here
 
-# OpenAI API Configuration (optional)
-# Get your API key from: https://platform.openai.com/api-keys
-OPENAI_API_KEY=
-
-# Whisper Model Settings
+# Whisper Configuration
 WHISPER_MODEL_SIZE=medium
-WHISPER_DEVICE=auto
+WHISPER_DEVICE=cpu
 
-# Server Settings
+# Server Configuration
 HOST=0.0.0.0
 PORT=5002
 DEBUG=False
 
 # Security
-SECRET_KEY=$secretKey
+SECRET_KEY=your_secret_key_here
 API_KEY_REQUIRED=False
 
 # Logging
 LOG_LEVEL=INFO
 
-# Windows-specific settings
+# LLM Configuration
+ENABLE_LLM=True
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+LLM_MODEL_ENHANCEMENT=aya:8b
+LLM_MODEL_GENERAL=llama3.2:3b
+LLM_TIMEOUT=30
+
+# Directories
 TEMP_DIR=temp
 UPLOAD_DIR=uploads
 OUTPUT_DIR=outputs
 "@
         
         Set-Content -Path ".env" -Value $envContent -Encoding UTF8
-        Write-Host "✅ Environment configuration created (.env)" -ForegroundColor Green
+        Write-Host "[OK] Environment configuration created (.env)" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to create environment configuration: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to create environment configuration: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
-# Function to create required directories
-function Create-RequiredDirectories {
-    Write-Host "📁 Creating required directories..." -ForegroundColor Yellow
-    try {
-        $directories = @("temp", "uploads", "outputs", "models", "logs")
-        foreach ($dir in $directories) {
-            if (-not (Test-Path $dir)) {
-                New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            }
-        }
-        Write-Host "✅ Required directories created" -ForegroundColor Green
-        return $true
-    }
-    catch {
-        Write-Host "❌ Failed to create directories: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
-    }
-}
-
-# Function to download initial Whisper model
+# Function to download Whisper model
 function Download-WhisperModel {
-    Write-Host "🤖 Downloading initial Whisper model..." -ForegroundColor Yellow
+    Write-Host "Downloading Whisper model..." -ForegroundColor Yellow
     try {
-        python -c "
-try:
-    from faster_whisper import WhisperModel
-    import os
-    os.makedirs('models', exist_ok=True)
-    model = WhisperModel('medium', download_root='./models')
-    print('✅ Medium Whisper model downloaded successfully')
-except Exception as e:
-    print(f'⚠️ Failed to download model: {e}')
-    print('Models will be downloaded on first use')
-"
+        # Create a simple Python script to download the model
+        $downloadScript = @"
+import whisper
+print('Downloading Whisper medium model...')
+model = whisper.load_model('medium')
+print('[OK] Whisper model downloaded successfully')
+"@
+        
+        $downloadScript | Out-File -FilePath "download_model.py" -Encoding UTF8
+        python download_model.py
+        Remove-Item "download_model.py" -Force
+        
+        Write-Host "[OK] Whisper model downloaded" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "⚠️ Failed to download initial model - models will be downloaded on first use" -ForegroundColor Yellow
+        Write-Host "[WARN] Whisper model download failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "[INFO] Model will be downloaded automatically on first use" -ForegroundColor Yellow
         return $true
     }
 }
 
 # Function to create Windows service script
 function Create-ServiceScript {
-    Write-Host "🔧 Creating Windows service script..." -ForegroundColor Yellow
+    Write-Host "Creating Windows service script..." -ForegroundColor Yellow
     try {
-        $serviceScript = @"
+        $serviceScript = @'
 @echo off
-cd /d "$InstallPath"
+cd /d "{0}"
 call venv\Scripts\activate.bat
 python app.py
 pause
-"@
+'@ -f $InstallPath
         
         Set-Content -Path "start_service.bat" -Value $serviceScript -Encoding ASCII
         
-        $startScript = @"
+        $startScript = @'
 @echo off
 echo Starting Ultimate Arabic Transcription Engine...
-cd /d "$InstallPath"
+cd /d "{0}"
 call venv\Scripts\activate.bat
 start /min python app.py
 echo Service started. Access at http://localhost:5002
 timeout /t 3 /nobreak >nul
-"@
+'@ -f $InstallPath
         
         Set-Content -Path "start.bat" -Value $startScript -Encoding ASCII
         
-        Write-Host "✅ Service scripts created" -ForegroundColor Green
+        # Create start_cli.bat for CLI execution
+        $cliScript = @'
+@echo off
+cd /d "{0}"
+call venv\Scripts\activate.bat
+echo.
+echo ========================================
+echo   Arabic Transcription CLI Tool
+echo ========================================
+echo.
+echo Usage Examples:
+echo   Interactive mode: python arabic_cli_ultimate.py --interactive
+echo   Transcribe file:  python arabic_cli_ultimate.py --file audio.wav
+echo   Batch process:    python arabic_cli_ultimate.py --batch-dir ./recordings
+echo   Full help:        python arabic_cli_ultimate.py --help-full
+echo.
+python arabic_cli_ultimate.py %*
+pause
+'@ -f $InstallPath
+        
+        Set-Content -Path "start_cli.bat" -Value $cliScript -Encoding ASCII
+        
+        Write-Host "[OK] Service scripts created" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "❌ Failed to create service scripts: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to create service scripts: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
 # Function to create desktop shortcut
 function Create-DesktopShortcut {
-    Write-Host "🖥️ Creating desktop shortcut..." -ForegroundColor Yellow
+    Write-Host "Creating desktop shortcuts..." -ForegroundColor Yellow
     try {
         $WshShell = New-Object -comObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\Arabic Transcription Engine.lnk")
+        
+        # Create Web App shortcut
+        $Shortcut = $WshShell.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Ultimate Arabic Transcription.lnk")
         $Shortcut.TargetPath = "$InstallPath\start.bat"
         $Shortcut.WorkingDirectory = $InstallPath
-        $Shortcut.Description = "Ultimate Arabic Transcription Engine"
+        $Shortcut.IconLocation = "$InstallPath\start.bat"
+        $Shortcut.Description = "Ultimate Arabic Transcription Engine (Web Interface)"
         $Shortcut.Save()
         
-        Write-Host "✅ Desktop shortcut created" -ForegroundColor Green
+        # Create CLI shortcut
+        $CLIShortcut = $WshShell.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\Arabic CLI.lnk")
+        $CLIShortcut.TargetPath = "$InstallPath\start_cli.bat"
+        $CLIShortcut.WorkingDirectory = $InstallPath
+        $CLIShortcut.IconLocation = "$InstallPath\start_cli.bat"
+        $CLIShortcut.Description = "Ultimate Arabic Transcription CLI Tool"
+        $CLIShortcut.Save()
+        
+        Write-Host "[OK] Desktop shortcuts created" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "⚠️ Failed to create desktop shortcut: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "[WARN] Failed to create desktop shortcuts: $($_.Exception.Message)" -ForegroundColor Yellow
         return $true
     }
 }
 
 # Function to test installation
 function Test-Installation {
-    Write-Host "🧪 Testing installation..." -ForegroundColor Yellow
+    Write-Host "Testing installation..." -ForegroundColor Yellow
     try {
         # Test Python imports
-        python -c "
+        python -c @"
 import sys
 print(f'Python version: {sys.version}')
 
 # Test core imports
 try:
     import torch
-    print('✅ PyTorch imported successfully')
+    print('[OK] PyTorch imported successfully')
 except ImportError as e:
-    print(f'❌ PyTorch import failed: {e}')
+    print(f'[ERROR] PyTorch import failed: {e}')
 
 try:
     import whisper
-    print('✅ Whisper imported successfully')
+    print('[OK] Whisper imported successfully')
 except ImportError as e:
-    print(f'❌ Whisper import failed: {e}')
+    print(f'[ERROR] Whisper import failed: {e}')
 
 try:
     from faster_whisper import WhisperModel
-    print('✅ Faster-Whisper imported successfully')
+    print('[OK] Faster-Whisper imported successfully')
 except ImportError as e:
-    print(f'❌ Faster-Whisper import failed: {e}')
+    print(f'[ERROR] Faster-Whisper import failed: {e}')
 
+# Test CLI availability
 try:
-    import flask
-    print('✅ Flask imported successfully')
+    import arabic_cli_ultimate
+    print('[OK] CLI module imported successfully')
 except ImportError as e:
-    print(f'❌ Flask import failed: {e}')
-"
-        Write-Host "✅ Installation test completed" -ForegroundColor Green
+    print(f'[ERROR] CLI module import failed: {e}')
+"@
+        
+        # Test CLI help command
+        Write-Host "Testing CLI functionality..." -ForegroundColor Cyan
+        try {
+            python arabic_cli_ultimate.py --help | Select-Object -First 10
+        }
+        catch {
+            Write-Host "[WARN] CLI test failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+        
+        Write-Host "[OK] Installation test completed" -ForegroundColor Green
         return $true
     }
     catch {
-        Write-Host "⚠️ Installation test encountered issues: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "[WARN] Installation test encountered issues: $($_.Exception.Message)" -ForegroundColor Yellow
         return $true
     }
 }
 
 # Main installation process
-Write-Host "🚀 Starting silent installation process..." -ForegroundColor Cyan
-Write-Host ""
+Write-Host "Ultimate Arabic Transcription Engine - Windows Installation" -ForegroundColor Cyan
+Write-Host "=============================================================" -ForegroundColor Cyan
 
-$installSteps = @(
-    @{ Name = "Installing Chocolatey"; Function = { Install-Chocolatey } },
-    @{ Name = "Installing Python 3.11"; Function = { Install-Python } },
-    @{ Name = "Installing FFmpeg"; Function = { Install-FFmpeg } },
-    @{ Name = "Installing Git"; Function = { Install-Git } },
-    @{ Name = "Installing Visual C++ Redistributables"; Function = { Install-VCRedist } },
-    @{ Name = "Creating installation directory"; Function = { Create-InstallDirectory } },
-    @{ Name = "Setting up repository"; Function = { Setup-Repository } },
-    @{ Name = "Creating virtual environment"; Function = { Create-VirtualEnvironment } },
-    @{ Name = "Installing Python dependencies"; Function = { Install-PythonDependencies } },
-    @{ Name = "Creating environment configuration"; Function = { Create-EnvironmentConfig } },
-    @{ Name = "Creating required directories"; Function = { Create-RequiredDirectories } },
-    @{ Name = "Downloading Whisper model"; Function = { Download-WhisperModel } },
-    @{ Name = "Creating service scripts"; Function = { Create-ServiceScript } },
-    @{ Name = "Creating desktop shortcut"; Function = { Create-DesktopShortcut } },
-    @{ Name = "Testing installation"; Function = { Test-Installation } }
-)
-
-$successCount = 0
-$totalSteps = $installSteps.Count
-
-foreach ($step in $installSteps) {
-    Write-Host "[$($successCount + 1)/$totalSteps] $($step.Name)..." -ForegroundColor Cyan
-    if (& $step.Function) {
-        $successCount++
-    } else {
-        Write-Host "❌ Installation step failed: $($step.Name)" -ForegroundColor Red
-        Write-Host "💡 You may need to run this step manually" -ForegroundColor Yellow
-    }
+if ($WhatIf) {
+    Write-Host "Running in WhatIf mode - no actual changes will be made" -ForegroundColor Yellow
     Write-Host ""
 }
 
-# Installation summary
-Write-Host "🎉 Installation Summary" -ForegroundColor Cyan
-Write-Host "======================" -ForegroundColor Cyan
-Write-Host "✅ Completed steps: $successCount/$totalSteps" -ForegroundColor Green
-Write-Host "📍 Installation path: $InstallPath" -ForegroundColor Blue
-Write-Host ""
+# Check administrator privileges
+if (-not (Test-Administrator)) {
+    Write-Host "[WARN] This script requires administrator privileges for some operations." -ForegroundColor Yellow
+    Write-Host "[INFO] Please run PowerShell as Administrator for best results." -ForegroundColor Yellow
+    Write-Host ""
+}
 
-if ($successCount -eq $totalSteps) {
-    Write-Host "🎉 Installation completed successfully!" -ForegroundColor Green
+# Define installation steps
+$installSteps = @(
+    @{ Name = "Installing Chocolatey package manager"; Function = "Install-Chocolatey"; Skip = $SkipChocolatey },
+    @{ Name = "Installing Python"; Function = "Install-Python"; Skip = $SkipPython },
+    @{ Name = "Installing FFmpeg"; Function = "Install-FFmpeg"; Skip = $false },
+    @{ Name = "Installing Git"; Function = "Install-Git"; Skip = $SkipGit },
+    @{ Name = "Installing Visual C++ Redistributables"; Function = "Install-VCRedist"; Skip = $false },
+    @{ Name = "Installing Ollama for LLM support"; Function = "Install-Ollama"; Skip = $false },
+    @{ Name = "Starting Ollama service"; Function = "Start-OllamaService"; Skip = $false },
+    @{ Name = "Downloading LLM models"; Function = "Download-LLMModels"; Skip = $false },
+    @{ Name = "Creating installation directory"; Function = "Create-InstallDirectory"; Skip = $false },
+    @{ Name = "Setting up repository"; Function = "Setup-Repository"; Skip = $false },
+    @{ Name = "Creating virtual environment"; Function = "Create-VirtualEnvironment"; Skip = $false },
+    @{ Name = "Installing Python dependencies"; Function = "Install-PythonDependencies"; Skip = $false },
+    @{ Name = "Creating environment configuration"; Function = "Create-EnvironmentConfig"; Skip = $false },
+    @{ Name = "Downloading Whisper model"; Function = "Download-WhisperModel"; Skip = $false },
+    @{ Name = "Creating service scripts"; Function = "Create-ServiceScript"; Skip = $false },
+    @{ Name = "Creating desktop shortcut"; Function = "Create-DesktopShortcut"; Skip = $false },
+    @{ Name = "Testing installation"; Function = "Test-Installation"; Skip = $false }
+)
+
+# Execute installation steps
+$totalSteps = $installSteps.Count
+$currentStep = 0
+$failedSteps = @()
+
+foreach ($step in $installSteps) {
+    $currentStep++
+    
+    if ($step.Skip) {
+        Write-Host "Skipping: $($step.Name)" -ForegroundColor Gray
+        continue
+    }
+    
+    Write-Host ""
+    Write-Host "[$currentStep/$totalSteps] $($step.Name)..." -ForegroundColor Cyan
+    
+    if ($WhatIf) {
+        Write-Host "   Would execute: $($step.Function)" -ForegroundColor Gray
+        continue
+    }
+    
+    try {
+        $result = & $step.Function
+        if (-not $result) {
+            $failedSteps += $step.Name
+            Write-Host "[WARN] Step failed but continuing..." -ForegroundColor Yellow
+        }
+    }
+    catch {
+        $failedSteps += $step.Name
+        Write-Host "[ERROR] Step failed: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[WARN] Continuing with next step..." -ForegroundColor Yellow
+    }
+}
+
+# Installation summary
+Write-Host ""
+Write-Host "=============================================================" -ForegroundColor Cyan
+Write-Host "Installation Summary" -ForegroundColor Cyan
+Write-Host "=============================================================" -ForegroundColor Cyan
+
+if ($WhatIf) {
+    Write-Host "[OK] WhatIf mode completed - no actual changes were made" -ForegroundColor Green
+} elseif ($failedSteps.Count -eq 0) {
+    Write-Host "`n" + "="*80 -ForegroundColor Green
+    Write-Host "INSTALLATION COMPLETED SUCCESSFULLY!" -ForegroundColor Green
+    Write-Host "="*80 -ForegroundColor Green
+    Write-Host ""
+    Write-Host "The Ultimate Arabic Transcription Engine has been installed to:" -ForegroundColor Cyan
+    Write-Host "  $InstallPath" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Available interfaces:" -ForegroundColor Yellow
+    Write-Host "  1. Web Interface: Double-click 'Ultimate Arabic Transcription.lnk' on desktop" -ForegroundColor White
+    Write-Host "     Or run: $InstallPath\start.bat" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  2. CLI Tool: Double-click 'Arabic CLI.lnk' on desktop" -ForegroundColor White
+    Write-Host "     Or run: $InstallPath\start_cli.bat" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "CLI Usage Examples:" -ForegroundColor Yellow
+    Write-Host "  Interactive mode:  python arabic_cli_ultimate.py --interactive" -ForegroundColor White
+    Write-Host "  Transcribe file:   python arabic_cli_ultimate.py --file audio.wav" -ForegroundColor White
+    Write-Host "  Batch processing:  python arabic_cli_ultimate.py --batch-dir ./recordings" -ForegroundColor White
+    Write-Host "  Full help:         python arabic_cli_ultimate.py --help-full" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Features installed:" -ForegroundColor Yellow
+    Write-Host "  - Multiple transcription engines (Ultimate, Advanced, Enhanced)" -ForegroundColor White
+    Write-Host "  - LLM integration with Ollama (Aya and Llama models)" -ForegroundColor White
+    Write-Host "  - Speaker diarization support" -ForegroundColor White
+    Write-Host "  - Multiple output formats (TXT, JSON, SRT, VTT)" -ForegroundColor White
+    Write-Host "  - Batch processing capabilities" -ForegroundColor White
+    Write-Host "  - Interactive CLI mode" -ForegroundColor White
+    Write-Host "  - Web-based interface" -ForegroundColor White
+    Write-Host ""
+    Write-Host "For support and documentation, visit:" -ForegroundColor Cyan
+    Write-Host "  https://github.com/your-repo/ultimate-arabic-transcription-engine" -ForegroundColor White
+    Write-Host ""
+    Write-Host "="*80 -ForegroundColor Green
 } else {
-    Write-Host "⚠️ Installation completed with some issues" -ForegroundColor Yellow
-    Write-Host "💡 Check the output above for any failed steps" -ForegroundColor Yellow
+    Write-Host "[WARN] Installation completed with some issues:" -ForegroundColor Yellow
+    foreach ($failed in $failedSteps) {
+        Write-Host "   - $failed" -ForegroundColor Red
+    }
+    Write-Host ""
+    Write-Host "[INFO] You may need to manually complete the failed steps." -ForegroundColor Yellow
+    Write-Host "[INFO] Check the error messages above for guidance." -ForegroundColor Yellow
 }
 
 Write-Host ""
-Write-Host "🚀 Quick Start:" -ForegroundColor Cyan
-Write-Host "1. Double-click 'Arabic Transcription Engine' on your desktop" -ForegroundColor White
-Write-Host "   OR" -ForegroundColor Yellow
-Write-Host "2. Run: $InstallPath\start.bat" -ForegroundColor White
-Write-Host "3. Open your browser to: http://localhost:5002" -ForegroundColor White
-Write-Host ""
-Write-Host "⚙️ Configuration:" -ForegroundColor Cyan
-Write-Host "- Edit $InstallPath\.env to configure settings" -ForegroundColor White
-Write-Host "- Visit http://localhost:5002/settings for web configuration" -ForegroundColor White
-Write-Host ""
-Write-Host "📖 Documentation:" -ForegroundColor Cyan
-Write-Host "- README.md - Complete setup guide" -ForegroundColor White
-Write-Host "- Check $InstallPath for all project files" -ForegroundColor White
-Write-Host ""
-
-# Pause to show results
-Write-Host "Press any key to exit..." -ForegroundColor Yellow
+Write-Host "Press any key to exit..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
