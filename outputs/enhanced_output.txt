@@ -1,0 +1,8 @@
+Arabic Speech-to-Text Transcript
+========================================
+Generated: 2025-09-28 07:13:21
+Duration: 0.00 seconds
+Language: Unknown
+Model: Unknown
+Processing: Single speaker
+

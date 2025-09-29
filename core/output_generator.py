@@ -27,7 +27,8 @@ class OutputGenerator:
         transcript_data: Dict[str, Any],
         job_id: str,
         output_format: str,
-        enhance_timestamps: bool = True
+        enhance_timestamps: bool = True,
+        generate_separate_analysis: bool = True
     ) -> str:
         """
         Generate output file in specified format with enhanced timestamps.
@@ -37,6 +38,7 @@ class OutputGenerator:
             job_id: Unique job identifier
             output_format: Output format (txt, srt, vtt, json)
             enhance_timestamps: Whether to use enhanced timestamp processing
+            generate_separate_analysis: Whether to generate separate analysis files
             
         Returns:
             Path to generated output file
@@ -59,6 +61,10 @@ class OutputGenerator:
                 await self._generate_json(transcript_data, output_path)
             else:
                 raise ValueError(f"Unsupported output format: {output_format}")
+            
+            # Generate separate analysis files if requested
+            if generate_separate_analysis:
+                await self._generate_separate_analysis_files(transcript_data, job_id)
             
             logger.info(f"Generated {output_format} output with enhanced timestamps: {output_path}")
             return str(output_path)
@@ -563,6 +569,254 @@ class OutputGenerator:
             
         except Exception as e:
             logger.error(f"Summary report generation failed: {str(e)}")
+            raise
+
+    async def _generate_separate_analysis_files(self, transcript_data: Dict[str, Any], job_id: str) -> None:
+        """Generate separate files for speaker analysis and sentiment analysis."""
+        try:
+            # Generate speaker analysis file if speaker data exists
+            if transcript_data.get('multi_speaker', False) or transcript_data.get('speakers'):
+                await self._generate_speaker_analysis_file(transcript_data, job_id)
+            
+            # Generate sentiment analysis file if analysis data exists
+            if transcript_data.get('analysis_results') or transcript_data.get('sentiment'):
+                await self._generate_sentiment_analysis_file(transcript_data, job_id)
+                
+        except Exception as e:
+            logger.error(f"Separate analysis file generation failed: {str(e)}")
+            raise
+
+    async def _generate_speaker_analysis_file(self, transcript_data: Dict[str, Any], job_id: str) -> None:
+        """Generate detailed speaker analysis file."""
+        try:
+            output_path = self.config.RESULTS_FOLDER / f"{job_id}_speaker_analysis.txt"
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write("SPEAKER DIARIZATION & ANALYSIS REPORT\n")
+                f.write("=" * 50 + "\n\n")
+                
+                # Basic speaker information
+                f.write("SPEAKER OVERVIEW:\n")
+                f.write(f"• Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"• Total Speakers: {transcript_data.get('total_speakers', 1)}\n")
+                f.write(f"• Multi-speaker Processing: {transcript_data.get('multi_speaker', False)}\n")
+                f.write(f"• Total Duration: {transcript_data.get('duration', 0):.2f} seconds\n\n")
+                
+                # Individual speaker analysis
+                speakers = transcript_data.get('speakers', [])
+                if speakers:
+                    f.write("INDIVIDUAL SPEAKER ANALYSIS:\n")
+                    f.write("=" * 30 + "\n\n")
+                    
+                    for i, speaker in enumerate(speakers, 1):
+                        speaker_id = speaker.get('speaker_id', f'Speaker_{i}')
+                        speaker_label = speaker.get('speaker_label', f'Speaker {i}')
+                        
+                        f.write(f"{speaker_label} ({speaker_id})\n")
+                        f.write("-" * len(f"{speaker_label} ({speaker_id})") + "\n")
+                        
+                        # Basic stats
+                        duration = speaker.get('duration', 0)
+                        word_count = len(speaker.get('transcript', '').split())
+                        confidence = speaker.get('confidence', 0)
+                        
+                        f.write(f"Duration: {duration:.2f} seconds\n")
+                        f.write(f"Word Count: {word_count}\n")
+                        f.write(f"Confidence: {confidence:.3f}\n")
+                        
+                        # Speaking rate
+                        if duration > 0:
+                            speaking_rate = (word_count / duration) * 60
+                            f.write(f"Speaking Rate: {speaking_rate:.1f} words/minute\n")
+                        
+                        # Voice characteristics
+                        characteristics = speaker.get('characteristics', {})
+                        if characteristics:
+                            f.write("\nVoice Characteristics:\n")
+                            
+                            avg_pitch = characteristics.get('avg_pitch_hz', 0)
+                            if avg_pitch > 0:
+                                f.write(f"• Average Pitch: {avg_pitch:.0f} Hz\n")
+                            
+                            pitch_range = characteristics.get('pitch_range_hz', 0)
+                            if pitch_range > 0:
+                                f.write(f"• Pitch Range: {pitch_range:.0f} Hz\n")
+                            
+                            energy = characteristics.get('avg_energy', 0)
+                            if energy > 0:
+                                f.write(f"• Average Energy: {energy:.3f}\n")
+                            
+                            speaking_rate_opm = characteristics.get('speaking_rate_opm', 0)
+                            if speaking_rate_opm > 0:
+                                f.write(f"• Speaking Rate: {speaking_rate_opm:.0f} onsets/min\n")
+                        
+                        # Segments breakdown
+                        segments = speaker.get('segments', [])
+                        if segments:
+                            f.write(f"\nSpeaking Segments ({len(segments)} total):\n")
+                            for j, segment in enumerate(segments[:10], 1):  # Show first 10 segments
+                                start_time = self._format_timestamp(segment.get('start', 0))
+                                end_time = self._format_timestamp(segment.get('end', 0))
+                                segment_text = segment.get('text', '')[:100]
+                                if len(segment.get('text', '')) > 100:
+                                    segment_text += "..."
+                                f.write(f"  {j}. [{start_time} - {end_time}] {segment_text}\n")
+                            
+                            if len(segments) > 10:
+                                f.write(f"  ... and {len(segments) - 10} more segments\n")
+                        
+                        f.write("\n" + "=" * 30 + "\n\n")
+                
+                # Processing metadata
+                processing_metadata = transcript_data.get('processing_metadata', {})
+                if processing_metadata:
+                    f.write("PROCESSING DETAILS:\n")
+                    f.write("-" * 20 + "\n")
+                    
+                    diarization_method = processing_metadata.get('diarization_method', 'Unknown')
+                    f.write(f"Diarization Method: {diarization_method}\n")
+                    
+                    processing_time = processing_metadata.get('diarization_time', 0)
+                    if processing_time > 0:
+                        f.write(f"Diarization Processing Time: {processing_time:.2f} seconds\n")
+                    
+                    quality_score = processing_metadata.get('diarization_quality', 0)
+                    if quality_score > 0:
+                        f.write(f"Diarization Quality Score: {quality_score:.3f}\n")
+            
+            logger.info(f"Generated speaker analysis file: {output_path}")
+            
+        except Exception as e:
+            logger.error(f"Speaker analysis file generation failed: {str(e)}")
+            raise
+
+    async def _generate_sentiment_analysis_file(self, transcript_data: Dict[str, Any], job_id: str) -> None:
+        """Generate detailed sentiment and text analysis file."""
+        try:
+            output_path = self.config.RESULTS_FOLDER / f"{job_id}_sentiment_analysis.txt"
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write("SENTIMENT & TEXT ANALYSIS REPORT\n")
+                f.write("=" * 50 + "\n\n")
+                
+                # Basic information
+                f.write("ANALYSIS OVERVIEW:\n")
+                f.write(f"• Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"• Text Length: {len(transcript_data.get('text', ''))} characters\n")
+                f.write(f"• Word Count: {len(transcript_data.get('text', '').split())}\n")
+                
+                # Get analysis results
+                analysis_results = transcript_data.get('analysis_results', {})
+                
+                # Sentiment Analysis
+                if 'sentiment' in analysis_results:
+                    sentiment = analysis_results['sentiment']
+                    f.write("\n" + "=" * 30 + "\n")
+                    f.write("SENTIMENT ANALYSIS:\n")
+                    f.write("=" * 30 + "\n")
+                    
+                    f.write(f"Overall Sentiment: {sentiment.get('label', 'Unknown').title()}\n")
+                    f.write(f"Sentiment Score: {sentiment.get('score', 0):.3f} (range: -1 to +1)\n")
+                    f.write(f"Confidence: {sentiment.get('confidence', 0):.3f}\n")
+                    
+                    emotions = sentiment.get('emotions', [])
+                    if emotions:
+                        f.write(f"Detected Emotions: {', '.join(emotions)}\n")
+                
+                # Entity Recognition
+                if 'entities' in analysis_results:
+                    entities = analysis_results['entities']
+                    f.write("\n" + "=" * 30 + "\n")
+                    f.write("NAMED ENTITY RECOGNITION:\n")
+                    f.write("=" * 30 + "\n")
+                    
+                    entity_types = ['persons', 'locations', 'organizations', 'dates', 'other']
+                    for entity_type in entity_types:
+                        entity_list = entities.get(entity_type, [])
+                        if entity_list:
+                            f.write(f"{entity_type.title()}: {', '.join(entity_list)}\n")
+                
+                # Topic Analysis
+                if 'topics' in analysis_results:
+                    topics = analysis_results['topics']
+                    f.write("\n" + "=" * 30 + "\n")
+                    f.write("TOPIC ANALYSIS:\n")
+                    f.write("=" * 30 + "\n")
+                    
+                    main_topics = topics.get('main_topics', [])
+                    if main_topics:
+                        f.write(f"Main Topics: {', '.join(main_topics)}\n")
+                    
+                    categories = topics.get('categories', [])
+                    if categories:
+                        f.write(f"Categories: {', '.join(categories)}\n")
+                    
+                    topic_scores = topics.get('topic_scores', {})
+                    if topic_scores:
+                        f.write("\nTopic Scores:\n")
+                        for topic, score in topic_scores.items():
+                            f.write(f"• {topic}: {score:.3f}\n")
+                
+                # Keywords
+                if 'keywords' in analysis_results:
+                    keywords = analysis_results['keywords']
+                    if keywords:
+                        f.write("\n" + "=" * 30 + "\n")
+                        f.write("KEYWORD EXTRACTION:\n")
+                        f.write("=" * 30 + "\n")
+                        f.write(f"Key Terms: {', '.join(keywords)}\n")
+                
+                # Complexity Analysis
+                if 'complexity' in analysis_results:
+                    complexity = analysis_results['complexity']
+                    f.write("\n" + "=" * 30 + "\n")
+                    f.write("TEXT COMPLEXITY ANALYSIS:\n")
+                    f.write("=" * 30 + "\n")
+                    
+                    f.write(f"Complexity Level: {complexity.get('complexity_level', 'Unknown').title()}\n")
+                    f.write(f"Readability Score: {complexity.get('readability_score', 0):.2f}\n")
+                    f.write(f"Sentence Count: {complexity.get('sentence_count', 0)}\n")
+                    f.write(f"Average Sentence Length: {complexity.get('average_sentence_length', 0):.1f} words\n")
+                    f.write(f"Vocabulary Richness: {complexity.get('vocabulary_richness', 0):.3f}\n")
+                
+                # Analysis Summary
+                if 'summary' in analysis_results:
+                    summary = analysis_results['summary']
+                    f.write("\n" + "=" * 30 + "\n")
+                    f.write("ANALYSIS SUMMARY:\n")
+                    f.write("=" * 30 + "\n")
+                    
+                    text_stats = summary.get('text_stats', {})
+                    f.write(f"Processing Time: {text_stats.get('processing_time', 0):.2f} seconds\n")
+                    f.write(f"Language: {text_stats.get('language', 'Unknown')}\n")
+                    
+                    if 'sentiment' in summary:
+                        sent_summary = summary['sentiment']
+                        f.write(f"Sentiment Summary: {sent_summary.get('label', 'Unknown')} ")
+                        f.write(f"(confidence: {sent_summary.get('confidence', 0):.2f})\n")
+                    
+                    if 'entities' in summary:
+                        ent_summary = summary['entities']
+                        f.write(f"Total Entities Found: {ent_summary.get('total_entities', 0)}\n")
+                    
+                    if 'topics' in summary:
+                        topic_summary = summary['topics']
+                        f.write(f"Topics Identified: {topic_summary.get('topic_count', 0)}\n")
+                
+                # Text preview for context
+                f.write("\n" + "=" * 30 + "\n")
+                f.write("TEXT SAMPLE:\n")
+                f.write("=" * 30 + "\n")
+                
+                text_sample = transcript_data.get('text', '')[:500]
+                if len(transcript_data.get('text', '')) > 500:
+                    text_sample += "..."
+                f.write(f'"{text_sample}"\n')
+            
+            logger.info(f"Generated sentiment analysis file: {output_path}")
+            
+        except Exception as e:
+            logger.error(f"Sentiment analysis file generation failed: {str(e)}")
             raise
 
     async def generate_timestamp_report(self, transcript_data: Dict[str, Any], job_id: str) -> str:

@@ -3,36 +3,8 @@ Unified transcription service for Arabic STT Platform
 Handles both local and API-based transcription with optional Aya enhancement
 """
 
-import a        # Determine engine priority for Arabic: Ultimate > Advanced > Enhanced > Standard
-        use_ultimate_arabic = (
-            language == 'ar' and 
-            processing_mode == 'local' and 
-            getattr(self, 'ultimate_arabic_engine', None) is not None and
-            kwargs.get('use_ultimate_arabic', True)  # Allow override
-        )
-        
-        use_advanced_arabic = (
-            language == 'ar' and 
-            processing_mode == 'local' and 
-            not use_ultimate_arabic and  # Fall back if ultimate not available
-            self.advanced_arabic_engine is not None and
-            kwargs.get('use_advanced_arabic', True)  # Allow override
-        )
-        
-        use_enhanced_arabic = (
-            language == 'ar' and 
-            processing_mode == 'local' and 
-            not use_ultimate_arabic and
-            not use_advanced_arabic and  # Fall back to enhanced if advanced not available
-            self.enhanced_arabic_engine is not None and
-            kwargs.get('use_enhanced_arabic', True)  # Allow override
-        )
-        
-        if use_ultimate_arabic:
-            logger.info("🔥 Using Ultimate Arabic transcription engine v3.0")
-            # Step 1: Ultimate Arabic transcription (highest quality)
-            transcription_result = self.ultimate_arabic_engine.transcribe(audio_path)
-        elif use_advanced_arabic:ging
+import asyncio
+import logging
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 import time

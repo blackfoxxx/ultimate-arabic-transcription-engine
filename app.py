@@ -10,6 +10,9 @@ import asyncio
 import threading
 import subprocess
 import time
+import gc
+import psutil
+import torch
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for
@@ -19,6 +22,8 @@ import uuid
 from typing import Optional, Dict, Any, List
 import json
 import sqlite3
+import signal
+import sys
 
 from core.audio_processor import AudioProcessor
 from core.unified_transcription_service_v3 import UnifiedTranscriptionService
@@ -43,8 +48,102 @@ output_generator = OutputGenerator()
 file_manager = FileManager()
 settings_manager = SettingsManager(file_manager)
 
+# Memory management globals
+_last_memory_cleanup = time.time()
+_memory_cleanup_lock = threading.Lock()
+
+def cleanup_memory(force: bool = False):
+    """Perform comprehensive memory cleanup to prevent crashes."""
+    global _last_memory_cleanup
+    current_time = time.time()
+    
+    # Only cleanup if enough time has passed or forced
+    if not force and (current_time - _last_memory_cleanup) < 30:
+        return
+        
+    with _memory_cleanup_lock:
+        try:
+            logger.debug("Performing memory cleanup...")
+            
+            # Force garbage collection
+            gc.collect()
+            
+            # Clear GPU cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                
+                # Log GPU memory usage
+                try:
+                    gpu_memory = torch.cuda.get_device_properties(0).total_memory
+                    gpu_allocated = torch.cuda.memory_allocated(0)
+                    gpu_cached = torch.cuda.memory_reserved(0)
+                    
+                    logger.debug(f"GPU Memory - Total: {gpu_memory/1024**3:.1f}GB, "
+                               f"Allocated: {gpu_allocated/1024**3:.1f}GB, "
+                               f"Cached: {gpu_cached/1024**3:.1f}GB")
+                except Exception:
+                    pass
+            
+            # Log system memory usage
+            try:
+                process = psutil.Process()
+                memory_info = process.memory_info()
+                logger.debug(f"System Memory - RSS: {memory_info.rss/1024**2:.1f}MB, "
+                           f"VMS: {memory_info.vms/1024**2:.1f}MB")
+            except Exception:
+                pass
+            
+            _last_memory_cleanup = current_time
+            
+        except Exception as e:
+            logger.error(f"Memory cleanup error: {e}")
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    logger.info(f"Received signal {signum}, shutting down gracefully...")
+    
+    try:
+        # Cleanup transcription services
+        if hasattr(transcription_service, 'shutdown'):
+            transcription_service.shutdown()
+        if hasattr(enhanced_transcription_service, 'shutdown'):
+            enhanced_transcription_service.shutdown()
+        
+        # Final memory cleanup
+        cleanup_memory(force=True)
+        
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
+    
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 # Initialize default settings on startup
 settings_manager.initialize_defaults()
+
+# Initialize enhanced transcription service with LLM support
+def initialize_enhanced_services():
+    """Initialize enhanced services in a separate thread."""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(enhanced_transcription_service.initialize())
+        if result:
+            logger.info("✅ Enhanced transcription service with LLM support initialized successfully")
+        else:
+            logger.warning("⚠️ Enhanced transcription service initialization failed")
+        loop.close()
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize enhanced services: {str(e)}")
+
+# Start initialization in background thread
+import threading
+init_thread = threading.Thread(target=initialize_enhanced_services, daemon=True)
+init_thread.start()
 
 # Load saved settings into runtime config
 saved_api_key = settings_manager.get_openai_api_key()
@@ -336,31 +435,45 @@ async def process_file_async(job_id: str, file_path: str, original_filename: str
     try:
         logger.info(f"Processing job {job_id}: {original_filename}")
         
+        # Initial memory cleanup before processing
+        cleanup_memory()
+        
         # Check file size for enhanced monitoring
         file_size_mb = Path(file_path).stat().st_size / (1024 * 1024)
         is_large_file = file_size_mb > 50  # 50MB threshold
         
         if is_large_file:
             logger.info(f"Large file detected ({file_size_mb:.1f}MB), enabling enhanced monitoring")
+            # Force memory cleanup for large files
+            cleanup_memory(force=True)
         
-        # Update job status to processing
-        status_message = f'Processing {"large " if is_large_file else ""}file ({file_size_mb:.1f}MB)...'
-        file_manager.update_job_status(job_id, 'processing', status_message)
+        # Initialize progress tracking
+        def update_progress(step: str, progress: int, details: str = ""):
+            """Update job progress with step information."""
+            processing_info = {
+                'step': step,
+                'step_progress': progress,
+                'details': details,
+                'file_size_mb': file_size_mb,
+                'is_large_file': is_large_file
+            }
+            status_message = f'{step}: {details}' if details else step
+            file_manager.update_job_status(job_id, 'processing', status_message, processing_info)
+        
+        # Step 1: Initialize processing
+        update_progress("Initializing", 5, f"Processing {original_filename} ({file_size_mb:.1f}MB)")
         
         # Process with options
         processing_mode = options.get('processing_mode', 'local')
         
-        # Add progress callbacks for large files
-        if is_large_file:
-            options['progress_callback'] = lambda stage: file_manager.update_job_status(
-                job_id, 'processing', f'Processing large file: {stage}...'
-            )
+        # Step 2: Preparing transcription
+        update_progress("Preparing", 10, f"Setting up {processing_mode} transcription")
         
         # Choose transcription service based on mode
         if processing_mode == 'api' and app.config.get('OPENAI_API_KEY'):
+            # Step 3: API transcription
+            update_progress("Transcribing", 20, "Starting API transcription")
             # Use enhanced service for API processing
-            if is_large_file:
-                file_manager.update_job_status(job_id, 'processing', 'Using API processing for large file...')
             transcript_data = await enhanced_transcription_service.transcribe(
                 audio_path=file_path,
                 processing_mode=processing_mode,
@@ -369,10 +482,11 @@ async def process_file_async(job_id: str, file_path: str, original_filename: str
                 job_id=job_id,
                 **{k: v for k, v in options.items() if k not in ['processing_mode', 'model_size', 'language']}
             )
+            update_progress("Transcribing", 70, "API transcription completed")
         else:
+            # Step 3: Local transcription
+            update_progress("Transcribing", 20, "Starting local transcription")
             # Use unified service for local processing
-            if is_large_file:
-                file_manager.update_job_status(job_id, 'processing', 'Using local processing for large file...')
             transcript_data = await transcription_service.transcribe(
                 audio_path=file_path,
                 processing_mode=processing_mode,
@@ -382,16 +496,23 @@ async def process_file_async(job_id: str, file_path: str, original_filename: str
                 job_id=job_id,
                 **{k: v for k, v in options.items() if k not in ['processing_mode', 'model_size', 'language', 'enable_aya_enhancement']}
             )
+            update_progress("Transcribing", 70, "Local transcription completed")
         
-        # Generate output files
+        # Step 4: Generate output files
+        update_progress("Generating outputs", 75, "Creating output files")
         output_formats = options.get('output_formats', ['txt'])
         results = {}
         
-        for format_type in output_formats:
+        for i, format_type in enumerate(output_formats):
+            progress = 75 + (15 * (i + 1) // len(output_formats))
+            update_progress("Generating outputs", progress, f"Creating {format_type.upper()} file")
             result_path = await output_generator.generate_output(
                 transcript_data, job_id, format_type
             )
             results[format_type] = result_path
+        
+        # Step 5: Finalizing
+        update_progress("Finalizing", 95, "Saving results")
         
         # Save job results
         processing_info = transcript_data.get('processing_info', {})
@@ -412,10 +533,15 @@ async def process_file_async(job_id: str, file_path: str, original_filename: str
             processing_info=processing_info
         )
         
+        # Final memory cleanup after successful completion
+        cleanup_memory()
+        
         logger.info(f"Job {job_id} completed successfully")
         
     except Exception as e:
         logger.error(f"Processing error for job {job_id}: {str(e)}")
+        # Cleanup memory even on failure
+        cleanup_memory()
         file_manager.update_job_status(job_id, 'failed', f'Processing failed: {str(e)}')
 
 # Monitoring API Endpoints
@@ -427,7 +553,7 @@ def get_all_jobs():
             conn.row_factory = sqlite3.Row
             cursor = conn.execute('''
                 SELECT job_id, original_filename, status, message, created_at, 
-                       updated_at, completed_at, options, results, processing_info
+                       updated_at, completed_at, restarted_at, options, results, processing_info
                 FROM jobs 
                 ORDER BY created_at DESC
             ''')
@@ -689,9 +815,11 @@ def kill_job(job_id: str):
         
         # Clean up temporary files
         temp_folder = Path(app.config['TEMP_FOLDER'])
+        cleaned_files = 0
         for temp_file in temp_folder.glob(f"{job_id}*"):
             try:
                 temp_file.unlink()
+                cleaned_files += 1
                 logger.info(f"Cleaned up temp file: {temp_file.name}")
             except Exception as e:
                 logger.warning(f"Failed to clean up {temp_file}: {str(e)}")
@@ -699,11 +827,114 @@ def kill_job(job_id: str):
         # Update job status
         file_manager.update_job_status(job_id, 'failed', 'Job killed by user request')
         
-        return jsonify({'success': True, 'message': 'Job killed successfully'})
+        return jsonify({
+            'success': True, 
+            'message': f'Job killed successfully. Cleaned up {cleaned_files} temporary files.',
+            'cleaned_files': cleaned_files
+        })
         
     except Exception as e:
         logger.error(f"Failed to kill job {job_id}: {str(e)}")
         return jsonify({'error': 'Failed to kill job'}), 500
+
+@app.route('/api/jobs/<job_id>/restart', methods=['POST'])
+def restart_job(job_id: str):
+    """Restart a failed or completed job."""
+    try:
+        # Get job info
+        job_info = file_manager.get_job_status(job_id)
+        if not job_info:
+            return jsonify({'error': 'Job not found'}), 404
+        
+        if job_info['status'] not in ['failed', 'completed']:
+            return jsonify({'error': 'Job can only be restarted if it has failed or completed'}), 400
+        
+        # Get original file path from job info
+        original_filename = job_info.get('original_filename', 'unknown')
+        
+        # Check if original file still exists in uploads
+        upload_folder = Path(app.config['UPLOAD_FOLDER'])
+        original_file_path = None
+        
+        # Look for the original file in uploads folder
+        for file_path in upload_folder.glob(f"{job_id}*"):
+            if file_path.is_file():
+                original_file_path = file_path
+                break
+        
+        if not original_file_path or not original_file_path.exists():
+            return jsonify({'error': 'Original file not found. Cannot restart job.'}), 404
+        
+        # Clean up any existing temporary files for this job
+        temp_folder = Path(app.config['TEMP_FOLDER'])
+        results_folder = Path(app.config['RESULTS_FOLDER'])
+        cleaned_files = 0
+        
+        # Clean temp files
+        for temp_file in temp_folder.glob(f"{job_id}*"):
+            try:
+                temp_file.unlink()
+                cleaned_files += 1
+                logger.info(f"Cleaned up temp file: {temp_file.name}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up {temp_file}: {str(e)}")
+        
+        # Clean result files
+        for result_file in results_folder.glob(f"{job_id}*"):
+            try:
+                result_file.unlink()
+                cleaned_files += 1
+                logger.info(f"Cleaned up result file: {result_file.name}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up {result_file}: {str(e)}")
+        
+        # Reset job status to processing
+        file_manager.update_job_status(job_id, 'processing', 'Job restarted - processing...', is_restart=True)
+        
+        # Get original options from job info
+        try:
+            options = json.loads(job_info.get('options', '{}')) if job_info.get('options') else {}
+        except (json.JSONDecodeError, TypeError):
+            options = {}
+        
+        # Set default options if not present
+        if not options:
+            options = {
+                'noise_reduction': 'auto',
+                'model_size': 'medium',
+                'processing_mode': 'local',
+                'output_formats': ['txt', 'srt']
+            }
+        
+        # Start processing in a new thread
+        def run_async_processing():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    process_file_async(job_id, str(original_file_path), original_filename, options)
+                )
+                loop.close()
+            except Exception as e:
+                logger.error(f"Restart processing error for job {job_id}: {str(e)}")
+                file_manager.update_job_status(job_id, 'failed', f'Restart failed: {str(e)}')
+        
+        processing_thread = threading.Thread(target=run_async_processing)
+        processing_thread.daemon = True
+        processing_thread.start()
+        
+        logger.info(f"Job {job_id} restarted successfully")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Job restarted successfully. Cleaned up {cleaned_files} files and started reprocessing.',
+            'cleaned_files': cleaned_files,
+            'job_id': job_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to restart job {job_id}: {str(e)}")
+        return jsonify({'error': 'Failed to restart job'}), 500
 
 @app.route('/api/status')
 def api_status():
@@ -1014,17 +1245,14 @@ def download_file_results(file_id: str):
 def api_v1_llm_status():
     """Get LLM service status and health information."""
     try:
-        # Check if LLM integration is available
+        # Use the global enhanced_transcription_service instance
         try:
-            from core.enhanced_transcription_service import EnhancedTranscriptionService
-            enhanced_service = EnhancedTranscriptionService()
-            
             # Get LLM status using async call
             def get_llm_status():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    result = loop.run_until_complete(enhanced_service.get_llm_status())
+                    result = loop.run_until_complete(enhanced_transcription_service.get_llm_status())
                     return result
                 finally:
                     loop.close()
@@ -1055,9 +1283,70 @@ def api_v1_llm_status():
 
 @app.route('/api/v1/models', methods=['GET'])
 def api_v1_models():
-    """Get available LLM models (placeholder implementation)."""
+    """Get available LLM models."""
     try:
-        # Return a basic response indicating LLM service is not available
+        # Use the global enhanced_transcription_service instance
+        def get_models():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # Get LLM status first
+                status = loop.run_until_complete(enhanced_transcription_service.get_llm_status())
+                
+                if not status.get('llm_enabled', False):
+                    return {
+                        'available_models': [],
+                        'recommended_models': [],
+                        'statistics': {
+                            'total_available': 0,
+                            'total_installed_size_gb': 0,
+                            'total_recommended': 0
+                        },
+                        'ollama_status': {
+                            'running': False,
+                            'version': None
+                        },
+                        'error': 'LLM service not configured. LLM features are disabled.'
+                    }
+                
+                # Get available models from LLM service
+                models = loop.run_until_complete(enhanced_transcription_service.llm_service.get_available_models())
+                
+                # Calculate statistics
+                total_size_gb = 0
+                for model in models:
+                    if 'size' in model:
+                        # Convert size to GB (assuming size is in bytes)
+                        size_bytes = model.get('size', 0)
+                        total_size_gb += size_bytes / (1024**3)
+                
+                # Check Ollama status
+                ollama_running = loop.run_until_complete(enhanced_transcription_service.llm_service.health_check())
+                
+                return {
+                    'available_models': models,
+                    'recommended_models': [
+                        {'name': 'llama3.2:3b', 'size': '2.0GB', 'installed': any(m.get('name') == 'llama3.2:3b' for m in models)},
+                        {'name': 'aya:8b', 'size': '4.8GB', 'installed': any(m.get('name') == 'aya:8b' for m in models)}
+                    ],
+                    'statistics': {
+                        'total_available': len(models),
+                        'total_installed_size_gb': round(total_size_gb, 2),
+                        'total_recommended': 2
+                    },
+                    'ollama_status': {
+                        'running': ollama_running,
+                        'version': 'Unknown'
+                    }
+                }
+            finally:
+                loop.close()
+        
+        result = get_models()
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to get LLM models: {str(e)}")
         return jsonify({
             'available_models': [],
             'recommended_models': [],
@@ -1070,11 +1359,8 @@ def api_v1_models():
                 'running': False,
                 'version': None
             },
-            'error': 'LLM service not configured. LLM features are disabled.'
-        })
-    except Exception as e:
-        logger.error(f"Failed to get LLM models: {str(e)}")
-        return jsonify({'error': 'LLM service unavailable'}), 500
+            'error': f'Failed to load models: {str(e)}'
+        }), 500
 
 @app.route('/api/v1/models/install', methods=['POST'])
 def api_v1_models_install():

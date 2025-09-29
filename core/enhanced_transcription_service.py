@@ -15,8 +15,10 @@ from core.unified_transcription_service import UnifiedTranscriptionService
 from core.llm_service import LLMService
 from core.text_enhancement import TextEnhancementEngine, EnhancementType
 from core.text_analysis import TextAnalysisEngine, AnalysisType
+from core.advanced_post_processor import AdvancedPostProcessor
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class EnhancedTranscriptionService:
     """Enhanced transcription service with LLM-powered text analysis and enhancement."""
@@ -31,6 +33,7 @@ class EnhancedTranscriptionService:
         self.llm_service = LLMService()
         self.text_enhancer = TextEnhancementEngine()
         self.text_analyzer = TextAnalysisEngine()
+        self.post_processor = AdvancedPostProcessor()
         
         # Service state
         self.initialized = False
@@ -51,6 +54,7 @@ class EnhancedTranscriptionService:
                 await self.llm_service.initialize()
                 await self.text_enhancer.initialize()
                 await self.text_analyzer.initialize()
+                await self.post_processor.initialize()
                 
                 logger.info("LLM services initialized successfully")
             else:
@@ -70,6 +74,7 @@ class EnhancedTranscriptionService:
                 await self.llm_service.cleanup()
                 await self.text_enhancer.cleanup()
                 await self.text_analyzer.cleanup()
+                await self.post_processor.cleanup()
             
             self.initialized = False
             logger.info("Enhanced Transcription Service cleaned up")
@@ -124,8 +129,11 @@ class EnhancedTranscriptionService:
                 **kwargs
             )
             
-            # Extract transcribed text
+            # Extract transcribed text - handle both old and new format
             transcribed_text = transcription_result.get('text', '')
+            if not transcribed_text and 'transcript' in transcription_result:
+                transcribed_text = transcription_result['transcript'].get('full_text', '')
+            
             if not transcribed_text:
                 logger.warning("No text was transcribed")
                 return transcription_result
@@ -177,6 +185,20 @@ class EnhancedTranscriptionService:
                 except Exception as e:
                     logger.error(f"Text analysis failed: {str(e)}")
                     enhanced_result['analysis'] = {'error': str(e)}
+            
+            # Step 4: Advanced Post-Processing (if enabled and LLM available)
+            if self.llm_enabled and enhanced_result.get('enhanced_text'):
+                try:
+                    logger.info("Applying advanced post-processing...")
+                    post_processed_result = await self.post_processor.process_transcription(
+                        enhanced_result, options.get('post_processing', {})
+                    )
+                    enhanced_result = post_processed_result
+                    enhanced_result['llm_processing']['post_processing_applied'] = True
+                    
+                except Exception as e:
+                    logger.error(f"Advanced post-processing failed: {str(e)}")
+                    enhanced_result['post_processing'] = {'error': str(e)}
             
             # Add processing metadata
             total_time = time.time() - start_time
@@ -445,12 +467,18 @@ class EnhancedTranscriptionService:
         
         if self.llm_enabled:
             try:
-                status['services']['llm_service'] = await self.llm_service.health_check()
+                # Get health check status
+                health_status = await self.llm_service.health_check()
+                logger.debug(f"LLM service health check result: {health_status}")
+                
+                status['services']['llm_service'] = health_status
                 status['services']['text_enhancer'] = self.text_enhancer.initialized
                 status['services']['text_analyzer'] = self.text_analyzer.initialized
                 
                 # Get available models
-                status['available_models'] = await self.llm_service.get_available_models()
+                available_models = await self.llm_service.get_available_models()
+                logger.debug(f"Available models from LLM service: {available_models}")
+                status['available_models'] = available_models
                 
                 status['configuration'] = {
                     'backend': self.config.LLM_BACKEND,
@@ -460,6 +488,7 @@ class EnhancedTranscriptionService:
                 }
                 
             except Exception as e:
+                logger.error(f"Error getting LLM status: {str(e)}")
                 status['error'] = str(e)
         
         return status

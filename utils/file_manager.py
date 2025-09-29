@@ -79,6 +79,7 @@ class FileManager:
                         created_at TEXT,
                         updated_at TEXT,
                         completed_at TEXT,
+                        restarted_at TEXT,
                         options TEXT,
                         results TEXT,
                         processing_info TEXT
@@ -100,6 +101,14 @@ class FileManager:
                 try:
                     conn.execute('ALTER TABLE jobs ADD COLUMN processing_info TEXT')
                     logger.info("Added processing_info column to jobs table")
+                except sqlite3.OperationalError:
+                    # Column already exists
+                    pass
+                
+                # Add restarted_at column if it doesn't exist
+                try:
+                    conn.execute('ALTER TABLE jobs ADD COLUMN restarted_at TEXT')
+                    logger.info("Added restarted_at column to jobs table")
                 except sqlite3.OperationalError:
                     # Column already exists
                     pass
@@ -182,7 +191,7 @@ class FileManager:
             logger.error(f"File upload failed: {str(e)}")
             raise
     
-    def update_job_status(self, job_id: str, status: str, message: str = "", processing_info: Optional[Dict[str, Any]] = None):
+    def update_job_status(self, job_id: str, status: str, message: str = "", processing_info: Optional[Dict[str, Any]] = None, is_restart: bool = False):
         """Update job status in database."""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -203,18 +212,33 @@ class FileManager:
                             WHERE job_id = ?
                         ''', [status, message, datetime.now().isoformat(), datetime.now().isoformat(), job_id])
                 else:
-                    if processing_info_json:
-                        conn.execute('''
-                            UPDATE jobs 
-                            SET status = ?, message = ?, updated_at = ?, processing_info = ?
-                            WHERE job_id = ?
-                        ''', [status, message, datetime.now().isoformat(), processing_info_json, job_id])
+                    # Handle restart case
+                    if is_restart:
+                        if processing_info_json:
+                            conn.execute('''
+                                UPDATE jobs 
+                                SET status = ?, message = ?, updated_at = ?, restarted_at = ?, processing_info = ?
+                                WHERE job_id = ?
+                            ''', [status, message, datetime.now().isoformat(), datetime.now().isoformat(), processing_info_json, job_id])
+                        else:
+                            conn.execute('''
+                                UPDATE jobs 
+                                SET status = ?, message = ?, updated_at = ?, restarted_at = ?
+                                WHERE job_id = ?
+                            ''', [status, message, datetime.now().isoformat(), datetime.now().isoformat(), job_id])
                     else:
-                        conn.execute('''
-                            UPDATE jobs 
-                            SET status = ?, message = ?, updated_at = ?
-                            WHERE job_id = ?
-                        ''', [status, message, datetime.now().isoformat(), job_id])
+                        if processing_info_json:
+                            conn.execute('''
+                                UPDATE jobs 
+                                SET status = ?, message = ?, updated_at = ?, processing_info = ?
+                                WHERE job_id = ?
+                            ''', [status, message, datetime.now().isoformat(), processing_info_json, job_id])
+                        else:
+                            conn.execute('''
+                                UPDATE jobs 
+                                SET status = ?, message = ?, updated_at = ?
+                                WHERE job_id = ?
+                            ''', [status, message, datetime.now().isoformat(), job_id])
                 
                 conn.commit()
                 

@@ -119,7 +119,7 @@ class Config:
     LLM_BACKEND = os.environ.get('LLM_BACKEND', 'ollama')  # 'ollama', 'transformers', 'openai_compatible'
     LLM_MODEL = os.environ.get('LLM_MODEL', 'llama3.2:3b')
     LLM_SERVER_URL = os.environ.get('LLM_SERVER_URL', 'http://localhost:11434')
-    ARABIC_LLM_MODEL = os.environ.get('ARABIC_LLM_MODEL', 'aya:8b')
+    ARABIC_LLM_MODEL = os.environ.get('ARABIC_LLM_MODEL', 'aya:35b')
     LLM_MAX_TOKENS = int(os.environ.get('LLM_MAX_TOKENS', '4096'))
     LLM_TEMPERATURE = float(os.environ.get('LLM_TEMPERATURE', '0.7'))
     

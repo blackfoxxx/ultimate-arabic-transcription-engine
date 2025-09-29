@@ -346,7 +346,7 @@
 
         function createJobCard(job) {
             const progress = calculateProgress(job);
-            const duration = calculateDuration(job.created_at, job.completed_at);
+            const duration = calculateDuration(job.created_at, job.completed_at, job.restarted_at);
             const fileSize = formatFileSize(job.file_size);
             
             return `
@@ -360,6 +360,7 @@
                                     <span class="badge bg-${getStatusColor(job.status)} status-${job.status}">
                                         ${getStatusIcon(job.status)} ${job.status}
                                     </span>
+                                    ${job.restarted_at ? '<span class="badge bg-warning text-dark ms-2"><i class="fas fa-redo me-1"></i>Restarted</span>' : ''}
                                 </div>
                                 <small class="text-muted font-monospace">${job.job_id}</small>
                             </div>
@@ -499,18 +500,20 @@
                 case 'completed': return 100;
                 case 'failed': return 0;
                 case 'processing': 
+                    // Use real step progress if available
                     if (job.processing_info && job.processing_info.step_progress) {
                         return job.processing_info.step_progress;
                     }
-                    // Estimate based on duration
+                    // Fallback to time-based estimate only if no real progress available
                     const duration = (new Date() - new Date(job.created_at)) / 1000 / 60;
                     return Math.min(Math.round(duration * 2), 95);
                 default: return 10;
             }
         }
 
-        function calculateDuration(createdAt, completedAt) {
-            const start = new Date(createdAt);
+        function calculateDuration(createdAt, completedAt, restartedAt) {
+            // If job was restarted, calculate duration from restart time
+            const start = restartedAt ? new Date(restartedAt) : new Date(createdAt);
             const end = completedAt ? new Date(completedAt) : new Date();
             const diffMs = end - start;
             return formatDuration(diffMs / 1000);
@@ -620,7 +623,7 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert(`Job ${jobId} killed successfully. Cleaned up ${result.cleaned_files} files and terminated ${result.killed_processes.length} processes.`);
+                    alert(`Job ${jobId} killed successfully. ${result.message || 'Job terminated.'}`);
                     refreshJobs();
                     loadStats();
                 } else {

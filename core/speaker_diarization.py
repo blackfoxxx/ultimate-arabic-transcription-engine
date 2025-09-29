@@ -273,10 +273,19 @@ class SpeakerDiarizationEngine:
             # Adaptive threshold based on energy statistics
             energy_mean = np.mean(energy)
             energy_std = np.std(energy)
-            threshold = energy_mean + 0.5 * energy_std
+            # Use a more sensitive threshold for Arabic speech detection
+            threshold = energy_mean + 0.1 * energy_std
+            
+            # Add debug logging
+            logger.debug(f"Energy stats - Mean: {energy_mean:.6f}, Std: {energy_std:.6f}, Threshold: {threshold:.6f}")
+            logger.debug(f"Energy range - Min: {np.min(energy):.6f}, Max: {np.max(energy):.6f}")
             
             # Find speech segments
             speech_frames = energy > threshold
+            
+            # Add debug logging for speech detection
+            speech_ratio = np.sum(speech_frames) / len(speech_frames)
+            logger.debug(f"Speech frames detected: {np.sum(speech_frames)}/{len(speech_frames)} ({speech_ratio:.2%})")
             
             # Convert frame indices to time segments
             vad_segments = []

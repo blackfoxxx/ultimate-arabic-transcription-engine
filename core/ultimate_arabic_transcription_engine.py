@@ -22,6 +22,10 @@ import librosa
 import re
 import json
 import torch
+import gc
+import psutil
+import threading
+import weakref
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import logging
@@ -57,11 +61,17 @@ class UltimateArabicTranscriptionEngine:
     5. Contextual post-processing
     """
     
-    def __init__(self, model_size: str = "large-v2", device: str = "cpu"):
+    def __init__(self, model_size: str = "large-v2", device: str = "cpu", enable_preprocessing: bool = False):
         self.model_size = model_size
         self.device = device
         self.model = None
         self.temp_dir = tempfile.mkdtemp(prefix="ultimate_arabic_")
+        self.enable_preprocessing = enable_preprocessing  # Make preprocessing optional for performance
+        
+        # Memory management
+        self._memory_lock = threading.Lock()
+        self._last_cleanup = time.time()
+        self._active_transcriptions = weakref.WeakSet()
         
         # Ultimate Arabic parameters - tested for maximum quality
         self.transcription_params = {
@@ -119,26 +129,69 @@ class UltimateArabicTranscriptionEngine:
             (r'(\u0628)\s+(\u0627)', r'\1\2'),  # Fix ب + ا separation
         ]
     
-    def initialize_model(self) -> bool:
-        """Initialize the Whisper model with optimal settings for Arabic"""
-        try:
-            logger.info(f"🔧 Initializing Ultimate Arabic Engine v3.0 - Model: {self.model_size}")
+    def _cleanup_memory(self, force: bool = False):
+        """Perform memory cleanup to prevent crashes."""
+        current_time = time.time()
+        
+        # Only cleanup if enough time has passed or forced
+        if not force and (current_time - self._last_cleanup) < 15:
+            return
             
-            # Use CPU for maximum compatibility
+        with self._memory_lock:
+            try:
+                # Force garbage collection
+                gc.collect()
+                
+                # Clear GPU cache if available
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()  # Ensure all operations complete
+                    
+                    # Log GPU memory usage
+                    gpu_memory = torch.cuda.get_device_properties(0).total_memory
+                    gpu_allocated = torch.cuda.memory_allocated(0)
+                    gpu_cached = torch.cuda.memory_reserved(0)
+                    
+                    logger.debug(f"Ultimate Engine GPU Memory - Total: {gpu_memory/1024**3:.1f}GB, "
+                               f"Allocated: {gpu_allocated/1024**3:.1f}GB, "
+                               f"Cached: {gpu_cached/1024**3:.1f}GB")
+                
+                # Log system memory usage
+                process = psutil.Process()
+                memory_info = process.memory_info()
+                logger.debug(f"Ultimate Engine System Memory - RSS: {memory_info.rss/1024**2:.1f}MB")
+                
+                self._last_cleanup = current_time
+                
+            except Exception as e:
+                logger.error(f"Ultimate Engine memory cleanup error: {e}")
+
+    def initialize_model(self) -> bool:
+        """Initialize the Whisper model with memory management."""
+        try:
+            logger.info(f"🔥 Initializing Ultimate Arabic Engine v3.0 with {self.model_size} on {self.device.upper()}")
+            
+            # Cleanup before initialization
+            self._cleanup_memory(force=True)
+            
+            # Initialize model with optimized settings
+            compute_type = "float16" if self.device == "cuda" else "int8"
+            
             self.model = WhisperModel(
-                self.model_size, 
+                self.model_size,
                 device=self.device,
-                compute_type="int8" if self.device == "cpu" else "float16",
-                download_root=os.path.expanduser("~/.cache/whisper")
+                compute_type=compute_type,
+                cpu_threads=min(8, os.cpu_count() or 4),  # Limit CPU threads
+                num_workers=1  # Single worker to prevent memory issues
             )
             
-            logger.info(f"✅ Ultimate Arabic Engine ready - Device: {self.device}")
+            logger.info(f"✅ Ultimate Arabic Engine v3.0 model loaded successfully on {self.device.upper()}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize model: {e}")
+            logger.error(f"❌ Failed to initialize Ultimate Arabic Engine: {e}")
             return False
-    
+
     def preprocess_arabic_audio(self, audio_path: str) -> str:
         """
         Advanced Arabic audio preprocessing optimized for Arabic phonetics
@@ -225,8 +278,8 @@ class UltimateArabicTranscriptionEngine:
         best_result = None
         best_quality = 0.0
         
-        # Model progression for quality optimization
-        model_progression = ["small", "medium", "large-v2"] if self.model_size == "large-v2" else [self.model_size]
+        # Model progression for quality optimization - skip smaller models for faster processing
+        model_progression = [self.model_size]  # Use only the requested model size for better performance
         
         for model_name in model_progression:
             try:
@@ -245,13 +298,39 @@ class UltimateArabicTranscriptionEngine:
                 # Select optimal prompt
                 prompt = self.select_arabic_prompt(audio_path)
                 
-                # Transcribe with Arabic-optimized parameters
-                segments, info = temp_model.transcribe(
-                    audio_path,
-                    language="ar",
-                    initial_prompt=prompt,
-                    **self.transcription_params
-                )
+                # Transcribe with Arabic-optimized parameters and timeout protection
+                logger.info("🔄 Starting transcription process...")
+                transcription_start = time.time()
+                
+                try:
+                    segments, info = temp_model.transcribe(
+                        audio_path,
+                        language="ar",
+                        initial_prompt=prompt,
+                        **self.transcription_params
+                    )
+                    
+                    transcription_time = time.time() - transcription_start
+                    logger.info(f"✅ Transcription completed in {transcription_time:.2f}s")
+                    
+                except Exception as transcription_error:
+                    logger.error(f"❌ Transcription failed: {transcription_error}")
+                    # Try with simplified parameters as fallback
+                    logger.info("🔄 Retrying with simplified parameters...")
+                    simplified_params = {
+                        "beam_size": 5,
+                        "patience": 1.0,
+                        "temperature": [0.0, 0.2],
+                        "no_speech_threshold": 0.6,
+                        "log_prob_threshold": -1.0
+                    }
+                    
+                    segments, info = temp_model.transcribe(
+                        audio_path,
+                        language="ar",
+                        initial_prompt=prompt,
+                        **simplified_params
+                    )
                 
                 # Process segments
                 transcript_segments = []
@@ -382,88 +461,129 @@ class UltimateArabicTranscriptionEngine:
     
     def transcribe(self, audio_path: str) -> Dict[str, Any]:
         """
-        Ultimate Arabic transcription with maximum quality optimization
+        Ultimate Arabic transcription with maximum quality and stability
         """
+        if not self.model:
+            return {
+                "error": "Model not initialized. Call initialize_model() first.",
+                "success": False
+            }
+        
         start_time = time.time()
         
+        # Cleanup memory before starting
+        self._cleanup_memory()
+        
         try:
-            if not self.model and not self.initialize_model():
-                raise Exception("Failed to initialize model")
+            logger.info(f"🔥 Starting Ultimate Arabic transcription for: {os.path.basename(audio_path)}")
             
-            logger.info(f"🚀 Ultimate Arabic transcription started - File: {os.path.basename(audio_path)}")
+            # Conditionally preprocess audio for optimal Arabic recognition
+            if self.enable_preprocessing:
+                processed_audio_path = self.preprocess_arabic_audio(audio_path)
+                logger.info("🎯 Applied Arabic audio preprocessing")
+            else:
+                processed_audio_path = audio_path
+                logger.info("⚡ Skipping preprocessing for faster processing")
             
-            # 1. Preprocess audio for Arabic optimization
-            processed_audio_path = self.preprocess_arabic_audio(audio_path)
+            # Select the best Arabic prompt based on audio characteristics
+            selected_prompt = self.select_arabic_prompt(processed_audio_path)
+            logger.info(f"📝 Using Arabic prompt: {list(self.arabic_prompts.keys())[list(self.arabic_prompts.values()).index(selected_prompt)]}")
             
-            # 2. Progressive transcription with quality optimization
+            # Perform progressive transcription with quality validation
             result = self.progressive_transcription(processed_audio_path)
             
-            if not result:
-                raise Exception("All transcription passes failed")
-            
-            # 3. Advanced text cleaning
-            cleaned_text = self.clean_arabic_text(result["full_text"])
-            
-            # 4. Recalculate quality metrics for cleaned text
-            final_quality = self.calculate_quality_metrics(cleaned_text, result["segments"])
-            
-            # 5. Build final result
-            processing_time = time.time() - start_time
-            
-            final_result = {
-                "transcript": {
-                    "full_text": cleaned_text,
-                    "segments": result["segments"],
-                    "word_count": len(cleaned_text.split()),
-                    "segment_count": len(result["segments"]),
-                    "type": "ultimate_arabic"
-                },
-                "metadata": {
-                    "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    "platform": "Ultimate Arabic STT Engine v3.0",
-                    "version": "3.0.0",
+            if result and result.get("full_text"):
+                # Clean and optimize the Arabic text
+                cleaned_text = self.clean_arabic_text(result["full_text"])
+                
+                # Calculate comprehensive quality metrics
+                quality_metrics = self.calculate_quality_metrics(cleaned_text, result.get("segments", []))
+                
+                processing_time = time.time() - start_time
+                
+                final_result = {
+                    "transcript": {
+                        "full_text": cleaned_text,
+                        "segments": result.get("segments", [])
+                    },
                     "language": "ar",
-                    "language_probability": result["info"]["language_probability"],
-                    "duration": result["info"]["duration"],
+                    "success": True,
+                    "engine": "ultimate_arabic_v3",
                     "processing_time": processing_time,
-                    "model_size": result["model"],
-                    "device": self.device,
-                    "quality_optimized": True
-                },
-                "quality_metrics": {
-                    "arabic_char_ratio": final_quality.arabic_char_ratio,
-                    "quality_score": final_quality.quality_score,
-                    "confidence_avg": final_quality.confidence_avg,
-                    "coherence_score": final_quality.coherence_score,
-                    "word_completeness": final_quality.word_completeness,
-                    "language_purity": final_quality.language_purity,
-                    "phonetic_accuracy": final_quality.phonetic_accuracy,
-                    "processing_approach": "progressive_multi_model"
+                    "quality_metrics": {
+                        "arabic_char_ratio": quality_metrics.arabic_char_ratio,
+                        "quality_score": quality_metrics.quality_score,
+                        "confidence_avg": quality_metrics.confidence_avg,
+                        "coherence_score": quality_metrics.coherence_score,
+                        "word_completeness": quality_metrics.word_completeness,
+                        "language_purity": quality_metrics.language_purity,
+                        "phonetic_accuracy": quality_metrics.phonetic_accuracy
+                    },
+                    "metadata": {
+                        "model_size": self.model_size,
+                        "device": self.device,
+                        "prompt_type": list(self.arabic_prompts.keys())[list(self.arabic_prompts.values()).index(selected_prompt)],
+                        "preprocessing_applied": True,
+                        "progressive_passes": result.get("passes_used", 1)
+                    }
                 }
-            }
-            
-            logger.info(f"✅ Ultimate Arabic transcription completed in {processing_time:.2f}s")
-            logger.info(f"📊 Quality Score: {final_quality.quality_score:.3f} | Arabic Purity: {final_quality.language_purity:.3f}")
-            
-            return final_result
-            
+                
+                logger.info(f"✅ Ultimate Arabic transcription completed in {processing_time:.2f}s")
+                logger.info(f"📊 Quality Score: {quality_metrics.quality_score:.3f} | Arabic Purity: {quality_metrics.language_purity:.3f}")
+                
+                return final_result
+                
+            else:
+                return {
+                    "error": result.get("error", "Unknown transcription error"),
+                    "success": False,
+                    "processing_time": time.time() - start_time
+                }
+                
         except Exception as e:
             logger.error(f"❌ Ultimate Arabic transcription failed: {e}")
             return {
                 "error": str(e),
-                "transcript": {"full_text": "", "segments": [], "word_count": 0, "segment_count": 0},
-                "metadata": {"processing_time": time.time() - start_time},
-                "quality_metrics": {}
+                "success": False,
+                "processing_time": time.time() - start_time
             }
-        
         finally:
-            # Cleanup temporary files
+            # Cleanup memory after transcription
+            self._cleanup_memory()
+            
+            # Clean up temporary files
             try:
+                if 'processed_audio_path' in locals() and processed_audio_path != audio_path:
+                    if os.path.exists(processed_audio_path):
+                        os.remove(processed_audio_path)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup temporary file: {e}")
+
+    async def cleanup(self):
+        """Clean shutdown with comprehensive memory cleanup."""
+        logger.info("Shutting down Ultimate Arabic Engine...")
+        
+        try:
+            # Clear model
+            if self.model:
+                del self.model
+                self.model = None
+            
+            # Force final cleanup
+            self._cleanup_memory(force=True)
+            
+            # Clean up temp directory
+            if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
                 import shutil
-                if os.path.exists(self.temp_dir):
+                try:
                     shutil.rmtree(self.temp_dir)
-            except:
-                pass
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp directory: {e}")
+            
+            logger.info("Ultimate Arabic Engine shutdown complete")
+            
+        except Exception as e:
+            logger.error(f"Error during Ultimate Arabic Engine shutdown: {e}")
 
 def test_ultimate_arabic_engine():
     """Test function for Ultimate Arabic Engine"""

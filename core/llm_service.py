@@ -16,6 +16,7 @@ from enum import Enum
 from config import Config
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class LLMBackend(Enum):
     """Supported LLM backends."""
@@ -42,6 +43,7 @@ class LLMService:
         self.server_url = "http://localhost:11434"
         self.session = None
         self.arabic_model = "aya:8b"  # Specialized Arabic model
+        self._session_lock = asyncio.Lock() if hasattr(asyncio, 'current_task') else None
         
         # Load configuration
         self._load_config()
@@ -63,10 +65,14 @@ class LLMService:
             if self.session is None:
                 self.session = aiohttp.ClientSession()
             
-            # Test connectivity
-            await self.health_check()
-            logger.info(f"LLM service initialized with {self.backend.value} backend")
-            return True
+            # Test connectivity and model availability
+            health_status = await self.health_check()
+            if health_status:
+                logger.info(f"LLM service initialized with {self.backend.value} backend")
+                return True
+            else:
+                logger.warning(f"LLM service initialized but health check failed - models may not be available")
+                return True  # Still return True as service is initialized, just models might not be ready
             
         except Exception as e:
             logger.error(f"Failed to initialize LLM service: {str(e)}")
@@ -78,29 +84,78 @@ class LLMService:
             await self.session.close()
             self.session = None
     
-    async def health_check(self) -> bool:
-        """Check if LLM service is available."""
+    async def _ensure_session(self):
+        """Ensure we have a valid aiohttp session for the current event loop."""
+        # Always create a new session for each request to avoid event loop issues
+        if self.session and not self.session.closed:
+            try:
+                await self.session.close()
+            except:
+                pass
+        
         try:
-            if self.backend == LLMBackend.OLLAMA:
-                return await self._ollama_health_check()
-            elif self.backend == LLMBackend.TRANSFORMERS:
-                return await self._transformers_health_check()
-            else:
-                return False
-                
+            # Create a new session for the current event loop
+            self.session = aiohttp.ClientSession()
         except Exception as e:
-            logger.error(f"LLM health check failed: {str(e)}")
+            logger.error(f"Failed to create aiohttp session: {str(e)}")
+            raise
+    
+    async def health_check(self) -> bool:
+        """Check if the LLM service is healthy."""
+        try:
+            logger.debug(f"Checking Ollama health at {self.server_url}")
+            await self._ensure_session()
+            
+            async with self.session.get(f"{self.server_url}/api/version", timeout=aiohttp.ClientTimeout(total=5)) as response:
+                if response.status == 200:
+                    logger.debug(f"Ollama version check status: {response.status}")
+                    result = True
+                else:
+                    logger.error(f"Ollama health check failed with status: {response.status}")
+                    result = False
+            
+            # Close the session after use
+            if self.session and not self.session.closed:
+                await self.session.close()
+                self.session = None
+            
+            logger.debug(f"Health check result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Ollama health check failed: {str(e)}")
+            # Ensure session is closed on error
+            if self.session and not self.session.closed:
+                try:
+                    await self.session.close()
+                except:
+                    pass
+                self.session = None
             return False
     
     async def _ollama_health_check(self) -> bool:
         """Check Ollama server health."""
         try:
+            logger.debug(f"Checking Ollama health at {self.server_url}")
             async with self.session.get(f"{self.server_url}/api/version") as response:
+                logger.debug(f"Ollama version check status: {response.status}")
                 if response.status == 200:
-                    # Check if model is available
-                    return await self._check_model_availability(self.model)
+                    # Check if primary model is available
+                    logger.debug(f"Checking primary model: {self.model}")
+                    primary_available = await self._check_model_availability(self.model)
+                    logger.debug(f"Primary model available: {primary_available}")
+                    
+                    # Check if Arabic model is available
+                    logger.debug(f"Checking Arabic model: {self.arabic_model}")
+                    arabic_available = await self._check_model_availability(self.arabic_model)
+                    logger.debug(f"Arabic model available: {arabic_available}")
+                    
+                    # Return true if at least one model is available
+                    result = primary_available or arabic_available
+                    logger.debug(f"Health check result: {result}")
+                    return result
                 return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Ollama health check failed: {str(e)}")
             return False
     
     async def _transformers_health_check(self) -> bool:
@@ -120,9 +175,12 @@ class LLMService:
                     if response.status == 200:
                         data = await response.json()
                         models = [m['name'] for m in data.get('models', [])]
+                        logger.debug(f"Available models: {models}")
+                        logger.debug(f"Checking for model: {model}")
                         return model in models
             return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to check model availability for {model}: {str(e)}")
             return False
     
     async def generate_text(
@@ -387,14 +445,43 @@ class LLMService:
         return prompts.get(enhancement_type, prompts["grammar"])
     
     async def get_available_models(self) -> List[Dict[str, Any]]:
-        """Get list of available models."""
+        """Get list of available models from the LLM service."""
         try:
-            if self.backend == LLMBackend.OLLAMA:
-                async with self.session.get(f"{self.server_url}/api/tags") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get('models', [])
-            return []
+            await self._ensure_session()
+            
+            async with self.session.get(f"{self.server_url}/api/tags", timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    models = []
+                    for model in data.get('models', []):
+                        models.append({
+                            'name': model.get('name', ''),
+                            'size': model.get('size', 0),
+                            'modified_at': model.get('modified_at', ''),
+                            'digest': model.get('digest', ''),
+                            'details': model.get('details', {})
+                        })
+                    
+                    # Close the session after use
+                    if self.session and not self.session.closed:
+                        await self.session.close()
+                        self.session = None
+                    
+                    return models
+                else:
+                    logger.error(f"Failed to get models, status: {response.status}")
+                    # Close the session on error
+                    if self.session and not self.session.closed:
+                        await self.session.close()
+                        self.session = None
+                    return []
         except Exception as e:
             logger.error(f"Failed to get available models: {str(e)}")
+            # Ensure session is closed on error
+            if self.session and not self.session.closed:
+                try:
+                    await self.session.close()
+                except:
+                    pass
+                self.session = None
             return []
